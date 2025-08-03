@@ -1,0 +1,14 @@
+neo4j-graphrag[openai]
+transformers
+datasets
+torch
+neo4j-graphrag[nlp]
+qdrant-client
+tenacity
+langchain-community
+langchain
+pypdf
+torch
+fastapi
+uvicorn[standard]
+python-dotenv
