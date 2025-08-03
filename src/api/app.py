@@ -124,7 +124,7 @@ async def ingest_pdf_to_kg(request: IngestPDFRequest):
     Ingest a PDF file into the knowledge graph.
 
     This endpoint processes a PDF file and populates the knowledge graph
-    using the EU AI Act schema and OpenAI services.
+    using schema and OpenAI services.
     """
     try:
         if not neo4j_conn:
@@ -237,7 +237,7 @@ async def get_schema():
     return {
         "status": "success",
         "schema": SCHEMA,
-        "description": "EU AI Act knowledge graph schema",
+        "description": "Knowledge graph schema",
     }
 
 
