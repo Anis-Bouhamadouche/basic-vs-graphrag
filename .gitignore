@@ -209,3 +209,6 @@ __marimo__/
 # Data
 qdrant_data
 *.pdf
+.DS_Store
+# Notebooks
+*.ipynb
