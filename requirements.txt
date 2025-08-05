@@ -1,4 +1,5 @@
 neo4j-graphrag[openai]
+langchain-openai
 transformers
 datasets
 torch
@@ -12,3 +13,4 @@ torch
 fastapi
 uvicorn[standard]
 python-dotenv
+langchain-qdrant
