@@ -212,4 +212,5 @@ qdrant_data
 .DS_Store
 # Notebooks
 *.ipynb
+*.json
 example.py
