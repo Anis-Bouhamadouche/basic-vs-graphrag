@@ -5,10 +5,9 @@ from langchain_text_splitters import CharacterTextSplitter
 from langchain_core.documents import Document
 from pypdf import PdfReader
 from typing import Optional, List
-from base import BaseLoader, BaseVectorDB
-from vector_db import QdrantVectorDB
+from basic_rag.base import BaseLoader, BaseVectorDB
+from basic_rag.vector_db import QdrantVectorDB
 from langchain_qdrant import QdrantVectorStore
-from utils import create_document_ids
 from dotenv import load_dotenv
 
 # Configure logging
@@ -140,10 +139,12 @@ class DocumentLoader(BaseLoader):
 
     def load_to_vector_store(
         self,
+        collection_name: str,
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         embeddings: Optional[OpenAIEmbeddings] = None,
         vector_store: Optional[BaseVectorDB] = None,
+        clear_existing: bool = False,
     ) -> List[str]:
         """
         Load the PDF file, chunk it, and embed the chunks into a vector store.
@@ -156,18 +157,24 @@ class DocumentLoader(BaseLoader):
             # Chunk the text
             chunks = self._chunk(text, chunk_size, chunk_overlap)
 
-            # Generate embeddings
-            # TODO: remove embedding generation step as it is taken care of in the vector store
-            # chunk_embeddings = self._embed_documents(chunks, embeddings)
-
             # Initialize vector store
             logger.info("Initializing Qdrant vector store")
-            qdrant_vector_db = QdrantVectorDB(default_collection_name="eu_ai_act")
+            qdrant_vector_db = QdrantVectorDB(default_collection_name=collection_name)
+
+            if clear_existing:
+                logger.info(
+                    f"Clearing existing collection: {collection_name} in Qdrant"
+                )
+                qdrant_vector_db.clear_collection(collection_name)
             client = qdrant_vector_db.client
+
+            if embeddings is None:
+                logger.debug("Creating new OpenAIEmbeddings instance")
+                embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
             vector_store = QdrantVectorStore(
                 client=client,
                 collection_name="eu_ai_act",
-                embedding=OpenAIEmbeddings(model="text-embedding-3-large"),
+                embedding=embeddings,
             )
 
             # Create document IDs

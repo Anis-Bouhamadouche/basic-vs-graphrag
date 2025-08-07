@@ -24,7 +24,7 @@ class BaseVectorDB(ABC):
         raise NotImplementedError("This class should not be instantiated directly.")
 
     @abstractmethod
-    def _create_collection(self):
+    def create_collection(self):
         """
         Create a collection in the vector database.
         """

@@ -1,12 +1,16 @@
 import os
 import logging
-import tempfile
+from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from graph_rag.graphdb import Neo4jConnection
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from basic_rag.loader import DocumentLoader
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Request
+from fastapi.exceptions import RequestValidationError
 from api.models import (
+    IngestPDFGraphRequest,
+    IngestPDFGraphResponse,
     IngestPDFRequest,
     IngestPDFResponse,
     CreateIndexRequest,
@@ -29,6 +33,11 @@ INDEX_NAME = os.getenv("INDEX_NAME")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_ENDPOINT = os.getenv("OPENAI_ENDPOINT")
 OPENAI_DEPLOYMENT_EMBEDDING = os.getenv("OPENAI_DEPLOYMENT_EMBEDDING")
+
+# Qdrant
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+
 SCHEMA = None
 
 # Global Neo4j connection
@@ -64,6 +73,54 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+# Global exception handlers
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle Pydantic validation errors."""
+    logger.error(f"Validation error for {request.url}: {exc}")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "Invalid input data",
+            "errors": exc.errors(),
+            "status": "validation_error",
+        },
+    )
+
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    """Handle ValueError exceptions."""
+    logger.error(f"Value error for {request.url}: {exc}")
+    return JSONResponse(
+        status_code=400,
+        content={"detail": str(exc), "status": "value_error"},
+    )
+
+
+@app.exception_handler(ConnectionError)
+async def connection_error_handler(request: Request, exc: ConnectionError):
+    """Handle connection errors."""
+    logger.error(f"Connection error for {request.url}: {exc}")
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Service temporarily unavailable",
+            "status": "connection_error",
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle all other unhandled exceptions."""
+    logger.error(f"Unhandled exception for {request.url}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "status": "server_error"},
+    )
 
 
 @app.get("/")
@@ -118,8 +175,8 @@ async def health_check():
         return {"status": "unhealthy", "database": "error", "error": str(e)}
 
 
-@app.post("/graph-rag/ingest-pdf", response_model=IngestPDFResponse)
-async def ingest_pdf_to_kg(request: IngestPDFRequest):
+@app.post("/graph-rag/ingest-pdf", response_model=IngestPDFGraphResponse)
+async def ingest_pdf_to_kg(request: IngestPDFGraphRequest):
     """
     Ingest a PDF file into the knowledge graph.
 
@@ -132,32 +189,67 @@ async def ingest_pdf_to_kg(request: IngestPDFRequest):
                 status_code=500, detail="Database connection not available"
             )
 
-        # Check if PDF file exists
+        # Check if PDF file exists (additional check beyond Pydantic validation)
         if not os.path.exists(request.pdf_path):
             raise HTTPException(
                 status_code=404, detail=f"PDF file not found: {request.pdf_path}"
             )
 
-        logger.info(f"Starting PDF ingestion: {request.pdf_path}")
+        # Validate OpenAI configuration
+        if not OPENAI_API_KEY:
+            raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+
+        logger.info(f"Starting PDF ingestion to knowledge graph: {request.pdf_path}")
+
+        # Test file readability
+        try:
+            with open(request.pdf_path, "rb") as f:
+                f.read(1)  # Try to read first byte
+        except PermissionError:
+            raise HTTPException(
+                status_code=403, detail="Permission denied accessing the PDF file"
+            )
+        except Exception as e:
+            logger.error(f"Error accessing PDF file: {e}")
+            raise HTTPException(
+                status_code=400, detail=f"Cannot access PDF file: {str(e)}"
+            )
 
         # Populate the knowledge graph
-        await neo4j_conn.populate_kg_from_pdf(
-            pdf_path=request.pdf_path,
-            schema=SCHEMA,
-            api_key=OPENAI_API_KEY,
-            endpoint=OPENAI_ENDPOINT,
-            deployment=OPENAI_DEPLOYMENT_EMBEDDING,
-            llm_model_name=request.llm_model_name,
-            clear_existing=request.clear_existing,
-            run_entity_resolution=request.run_entity_resolution,
-        )
+        try:
+            await neo4j_conn.populate_kg_from_pdf(
+                pdf_path=request.pdf_path,
+                schema=SCHEMA,
+                api_key=OPENAI_API_KEY,
+                endpoint=OPENAI_ENDPOINT,
+                deployment=OPENAI_DEPLOYMENT_EMBEDDING,
+                llm_model_name=request.llm_model_name,
+                clear_existing=request.clear_existing,
+                run_entity_resolution=request.run_entity_resolution,
+            )
+        except ConnectionError as e:
+            logger.error(f"Database connection error during ingestion: {e}")
+            raise HTTPException(status_code=503, detail="Database service unavailable")
+        except ValueError as e:
+            logger.error(f"Invalid input data for knowledge graph ingestion: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid input: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error during knowledge graph population: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="Internal server error during knowledge graph processing",
+            )
 
         # Get knowledge graph statistics
-        kg_stats = neo4j_conn.get_kg_stats()
+        try:
+            kg_stats = neo4j_conn.get_kg_stats()
+        except Exception as e:
+            logger.warning(f"Failed to get KG stats after ingestion: {e}")
+            kg_stats = {"error": "Could not retrieve statistics"}
 
-        logger.info("PDF ingestion completed successfully")
+        logger.info("PDF ingestion to knowledge graph completed successfully")
 
-        return IngestPDFResponse(
+        return IngestPDFGraphResponse(
             message="PDF successfully ingested into knowledge graph",
             status="success",
             kg_stats=kg_stats,
@@ -260,14 +352,42 @@ async def create_vector_index_endpoint(request: CreateIndexRequest):
             f"for label '{request.label}'"
         )
 
+        # Test database connectivity before creating index
+        try:
+            with neo4j_conn.driver.session() as session:
+                session.run("RETURN 1")
+        except Exception as e:
+            logger.error(f"Database connectivity test failed: {e}")
+            raise HTTPException(status_code=503, detail="Database service unavailable")
+
         # Create the vector index
-        neo4j_conn.create_vector_index(
-            index_name=request.index_name,
-            label=request.label,
-            embedding_property=request.embedding_property,
-            dimensions=request.dimensions,
-            similarity_fn=request.similarity_fn,
-        )
+        try:
+            neo4j_conn.create_vector_index(
+                index_name=request.index_name,
+                label=request.label,
+                embedding_property=request.embedding_property,
+                dimensions=request.dimensions,
+                similarity_fn=request.similarity_fn,
+            )
+        except ValueError as e:
+            logger.error(f"Invalid index parameters: {e}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid index configuration: {str(e)}"
+            )
+        except ConnectionError as e:
+            logger.error(f"Database connection error creating index: {e}")
+            raise HTTPException(status_code=503, detail="Database service unavailable")
+        except Exception as e:
+            logger.error(f"Error creating vector index: {e}")
+            # Check if it's an index already exists error
+            if "already exists" in str(e).lower():
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Index '{request.index_name}' already exists",
+                )
+            raise HTTPException(
+                status_code=500, detail="Internal server error creating vector index"
+            )
 
         return {
             "message": f"Vector index '{request.index_name}' created successfully",
@@ -302,7 +422,7 @@ async def update_schema(request: SchemaUpdateRequest):
     global SCHEMA
 
     try:
-        # Validate the schema structure
+        # Create the schema structure (Pydantic handles validation)
         new_schema = {
             "node_types": request.node_types,
             "relationship_types": request.relationship_types,
@@ -312,15 +432,101 @@ async def update_schema(request: SchemaUpdateRequest):
         # Update the global schema
         SCHEMA = new_schema
 
+        logger.info(
+            f"Schema updated successfully with {len(request.node_types)} node types and {len(request.relationship_types)} relationship types"
+        )
+
         return {
             "message": "Schema updated successfully",
             "status": "success",
             "schema": SCHEMA,
         }
 
+    except HTTPException:
+        raise
     except ValueError as e:
         logger.error(f"Invalid schema data: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid schema format: {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected error updating schema: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/basic-rag/ingest-pdf", response_model=IngestPDFResponse)
+async def ingest_pdf(request: IngestPDFRequest):
+    """
+    This endpoint processes a PDF file and stores its content in a vector store.
+    """
+    try:
+        # Check if PDF file exists (additional check beyond Pydantic validation)
+        if not os.path.exists(request.pdf_path):
+            raise HTTPException(
+                status_code=404, detail=f"PDF file not found: {request.pdf_path}"
+            )
+
+        logger.info(f"Starting PDF ingestion: {request.pdf_path}")
+
+        # Create a DocumentLoader instance
+        try:
+            loader = DocumentLoader(file_path=request.pdf_path)
+        except Exception as e:
+            logger.error(f"Failed to create DocumentLoader: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to initialize PDF loader: {str(e)}"
+            )
+
+        # Create embeddings instance
+        try:
+            embeddings = OpenAIEmbeddings(model=request.embedding_model_name)
+        except Exception as e:
+            logger.error(f"Failed to create OpenAI embeddings: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to initialize embeddings model: {str(e)}",
+            )
+
+        # Load the PDF into the vector store
+        try:
+            loader.load_to_vector_store(
+                chunk_size=request.chunk_size,
+                chunk_overlap=request.chunk_overlap,
+                embeddings=embeddings,
+                collection_name=request.collection_name,
+                clear_existing=request.clear_existing,
+            )
+        except FileNotFoundError as e:
+            logger.error(f"PDF file not found during processing: {e}")
+            raise HTTPException(status_code=404, detail=f"PDF file not found: {str(e)}")
+        except PermissionError as e:
+            logger.error(f"Permission denied accessing PDF: {e}")
+            raise HTTPException(
+                status_code=403, detail="Permission denied accessing the PDF file"
+            )
+        except ValueError as e:
+            logger.error(f"Invalid parameters for PDF processing: {e}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid processing parameters: {str(e)}"
+            )
+        except ConnectionError as e:
+            logger.error(f"Vector store connection error: {e}")
+            raise HTTPException(
+                status_code=503, detail="Vector store service unavailable"
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error during PDF processing: {e}")
+            raise HTTPException(
+                status_code=500, detail="Internal server error during PDF processing"
+            )
+
+        logger.info("PDF ingestion completed successfully")
+
+        return IngestPDFResponse(
+            message="PDF successfully ingested into vector store",
+            status="success",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in ingest_pdf endpoint: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
