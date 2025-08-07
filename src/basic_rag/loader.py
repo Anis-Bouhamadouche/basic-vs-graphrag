@@ -1,14 +1,16 @@
 import logging
+from typing import List, Optional
 from uuid import uuid4
-from langchain_openai import OpenAIEmbeddings
-from langchain_text_splitters import CharacterTextSplitter
+
+from dotenv import load_dotenv
 from langchain_core.documents import Document
+from langchain_openai import OpenAIEmbeddings
+from langchain_qdrant import QdrantVectorStore
+from langchain_text_splitters import CharacterTextSplitter
 from pypdf import PdfReader
-from typing import Optional, List
+
 from basic_rag.base import BaseLoader, BaseVectorDB
 from basic_rag.vector_db import QdrantVectorDB
-from langchain_qdrant import QdrantVectorStore
-from dotenv import load_dotenv
 
 # Configure logging
 logger = logging.getLogger(__name__)

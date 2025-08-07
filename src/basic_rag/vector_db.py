@@ -1,7 +1,9 @@
 import os
 from typing import List, Optional
+
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
+
 from basic_rag.base import BaseVectorDB
 
 

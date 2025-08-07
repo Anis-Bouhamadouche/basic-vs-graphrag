@@ -1,12 +1,13 @@
-from neo4j import GraphDatabase
-from neo4j_graphrag.indexes import create_vector_index
-from neo4j_graphrag.embeddings import OpenAIEmbeddings
-from neo4j_graphrag.experimental.pipeline.kg_builder import SimpleKGPipeline
-from neo4j_graphrag.llm import OpenAILLM
-from neo4j_graphrag.experimental.components.resolver import SpaCySemanticMatchResolver
-from typing import Optional, List, Tuple, Dict, Any
-import logging
 import asyncio
+import logging
+from typing import Any, Dict, List, Optional, Tuple
+
+from neo4j import GraphDatabase
+from neo4j_graphrag.embeddings import OpenAIEmbeddings
+from neo4j_graphrag.experimental.components.resolver import SpaCySemanticMatchResolver
+from neo4j_graphrag.experimental.pipeline.kg_builder import SimpleKGPipeline
+from neo4j_graphrag.indexes import create_vector_index
+from neo4j_graphrag.llm import OpenAILLM
 
 
 class Neo4jConnection:

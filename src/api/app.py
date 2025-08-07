@@ -1,22 +1,23 @@
-import os
 import logging
-from langchain_openai import OpenAIEmbeddings
-from dotenv import load_dotenv
-from fastapi.responses import JSONResponse
+import os
 from contextlib import asynccontextmanager
-from graph_rag.graphdb import Neo4jConnection
-from basic_rag.loader import DocumentLoader
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Request
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from langchain_openai import OpenAIEmbeddings
+
 from api.models import (
+    CreateIndexRequest,
     IngestPDFGraphRequest,
     IngestPDFGraphResponse,
     IngestPDFRequest,
     IngestPDFResponse,
-    CreateIndexRequest,
     SchemaUpdateRequest,
 )
-
+from basic_rag.loader import DocumentLoader
+from graph_rag.graphdb import Neo4jConnection
 
 load_dotenv()
 
