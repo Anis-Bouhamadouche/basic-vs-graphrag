@@ -1,1 +1,1 @@
-# API package for FastAPI application
+"""API package for the RAG application."""

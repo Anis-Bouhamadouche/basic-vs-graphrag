@@ -1,6 +1,6 @@
-import asyncio
+"""Neo4j graph database connection and operations module."""
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Literal
+from typing import Any, Dict, List, Optional, Literal
 
 from neo4j import GraphDatabase, Driver
 from neo4j_graphrag.embeddings import OpenAIEmbeddings
@@ -14,8 +14,7 @@ class Neo4jConnection:
     """Simple Neo4j connection class that manages the driver and provides basic functionality."""
 
     def __init__(self, uri: str, user: str, password: str, database: str = "neo4j") -> None:
-        """
-        Initialize Neo4j connection.
+        """Initialize Neo4j connection.
 
         Args:
             uri: Neo4j URI (e.g., "bolt://localhost:7687")
@@ -190,8 +189,7 @@ class Neo4jConnection:
         embedding_model_name: str,
         chat_model_name: str = "gpt-4o",
     ) -> SimpleKGPipeline:
-        """
-        Create a SimpleKGPipeline for building knowledge graphs.
+        """Create a SimpleKGPipeline for building knowledge graphs.
 
         Args:
             schema: Schema dictionary with node_types, relationship_types, and patterns
@@ -233,8 +231,7 @@ class Neo4jConnection:
     def create_entity_resolver(
         self, resolve_properties: Optional[List[str]] = None, similarity_threshold: float = 0.5
     ) -> SpaCySemanticMatchResolver:
-        """
-        Create a SpaCy entity resolver for post-processing.
+        """Create a SpaCy entity resolver for post-processing.
 
         Args:
             resolve_properties: Properties to compare for similarity (default: ["name"])
@@ -261,8 +258,7 @@ class Neo4jConnection:
         clear_existing: bool = False,
         run_entity_resolution: bool = True,
     ) -> None:
-        """
-        Populate the knowledge graph from a PDF file.
+        """Populate the knowledge graph from a PDF file.
 
         Args:
             pdf_path: Path to the PDF file
@@ -300,8 +296,7 @@ class Neo4jConnection:
         logging.info("KG population completed successfully")
 
     def get_kg_stats(self) -> Dict[str, int]:
-        """
-        Get basic statistics about the knowledge graph.
+        """Get basic statistics about the knowledge graph.
 
         Returns:
             Dictionary with node and relationship counts
@@ -319,8 +314,8 @@ class Neo4jConnection:
         # Get node counts by label
         result = self.execute_read(
             """
-            MATCH (n) 
-            RETURN labels(n)[0] as label, count(*) as count 
+            MATCH (n)
+            RETURN labels(n)[0] as label, count(*) as count
             ORDER BY count DESC
         """
         )
@@ -331,8 +326,8 @@ class Neo4jConnection:
         # Get relationship counts by type
         result = self.execute_read(
             """
-            MATCH ()-[r]->() 
-            RETURN type(r) as type, count(*) as count 
+            MATCH ()-[r]->()
+            RETURN type(r) as type, count(*) as count
             ORDER BY count DESC
         """
         )
@@ -350,8 +345,7 @@ class Neo4jConnection:
         dimensions: int = 3072,
         similarity_fn: Literal["cosine", "euclidean"] = "cosine",
     ) -> None:
-        """
-        Create a vector index for similarity search.
+        """Create a vector index for similarity search.
 
         Args:
             index_name: Name of the index

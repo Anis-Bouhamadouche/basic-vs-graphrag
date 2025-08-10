@@ -1,3 +1,4 @@
+"""FastAPI application for basic vs graph RAG comparison."""
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -60,7 +61,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             raise ValueError("NEO4J_USERNAME environment variable is required")
         if not NEO4J_PASSWORD:
             raise ValueError("NEO4J_PASSWORD environment variable is required")
-            
+
         neo4j_conn = Neo4jConnection(
             uri=NEO4J_URI, user=NEO4J_USERNAME, password=NEO4J_PASSWORD
         )
@@ -187,8 +188,7 @@ async def health_check() -> dict[str, str]:
 
 @app.post("/graph-rag/ingest-pdf", response_model=IngestPDFGraphResponse)
 async def ingest_pdf_to_kg(request: IngestPDFGraphRequest) -> IngestPDFGraphResponse:
-    """
-    Ingest a PDF file into the knowledge graph.
+    """Ingest a PDF file into the knowledge graph.
 
     This endpoint processes a PDF file and populates the knowledge graph
     using schema and OpenAI services.
@@ -228,7 +228,7 @@ async def ingest_pdf_to_kg(request: IngestPDFGraphRequest) -> IngestPDFGraphResp
         # Validate required parameters before attempting population
         if SCHEMA is None:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail="Schema must be created first. Call /create-schema endpoint."
             )
         if not OPENAI_ENDPOINT:
@@ -362,8 +362,7 @@ async def get_schema() -> dict[str, Any]:
 
 @app.post("/graph-rag/create-index")
 async def create_vector_index_endpoint(request: CreateIndexRequest) -> dict[str, Any]:
-    """
-    Create a vector index for similarity search.
+    """Create a vector index for similarity search.
 
     This endpoint creates a vector index on a specific node label
     to enable similarity search functionality.
@@ -392,10 +391,10 @@ async def create_vector_index_endpoint(request: CreateIndexRequest) -> dict[str,
             # Validate similarity function
             if request.similarity_fn not in ["cosine", "euclidean"]:
                 raise HTTPException(
-                    status_code=400, 
+                    status_code=400,
                     detail=f"Invalid similarity_fn: {request.similarity_fn}. Must be 'cosine' or 'euclidean'"
                 )
-            
+
             neo4j_conn.create_vector_index(
                 index_name=request.index_name,
                 label=request.label,
@@ -488,9 +487,7 @@ async def update_schema(request: SchemaUpdateRequest) -> dict[str, Any]:
 
 @app.post("/basic-rag/ingest-pdf", response_model=IngestPDFResponse)
 async def ingest_pdf(request: IngestPDFRequest) -> IngestPDFResponse:
-    """
-    This endpoint processes a PDF file and stores its content in a vector store.
-    """
+    """Process a PDF file and store its content in a vector store."""
     try:
         # Check if PDF file exists (additional check beyond Pydantic validation)
         if not os.path.exists(request.pdf_path):

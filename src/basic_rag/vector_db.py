@@ -1,5 +1,6 @@
+"""Vector database implementations for basic RAG."""
 import os
-from typing import List, Optional
+from typing import Optional
 
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
@@ -18,6 +19,7 @@ class QdrantVectorDB(BaseVectorDB):
         distance: Distance = Distance.COSINE,
         embedding_size: int = 3072,
     ) -> None:
+        """Initialize the Qdrant vector database connection."""
         self.url = os.getenv("QDRANT_URL", "http://localhost:6333")
 
         if api_key is None:

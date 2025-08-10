@@ -1,5 +1,6 @@
+"""Document loading and text processing utilities."""
 import logging
-from typing import List, Optional, Union, Any
+from typing import List, Optional, Any
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -20,20 +21,19 @@ load_dotenv()  # Load environment variables from .env file
 
 
 class DocumentLoader(BaseLoader):
+    """Document loader class for processing PDF files."""
+
     def __init__(self, file_path: str) -> None:
+        """Initialize the document loader with a file path."""
         super().__init__(file_path)
         logger.info(f"Initialized DocumentLoader with file: {file_path}")
 
     def load(self) -> List[str]:
-        """
-        Load the document and return its content as a list of strings.
-        """
+        """Load the document and return its content as a list of strings."""
         return self._extract_text()
 
     def _extract_text(self) -> List[str]:
-        """
-        Load text from a PDF file.
-        """
+        """Load text from a PDF file."""
         logger.info(f"Starting text extraction from PDF: {self.file_path}")
         try:
             pdf_reader = PdfReader(self.file_path)
@@ -56,9 +56,7 @@ class DocumentLoader(BaseLoader):
     def _chunk(
         self, text: List[str], chunk_size: int = 1000, chunk_overlap: int = 200
     ) -> List[Document]:
-        """
-        Chunk the text into smaller pieces and return as Document objects.
-        """
+        """Chunk the text into smaller pieces and return as Document objects."""
         logger.info(
             f"Starting text chunking with chunk_size={chunk_size}, chunk_overlap={chunk_overlap}"
         )
@@ -120,9 +118,7 @@ class DocumentLoader(BaseLoader):
         chunks: List[Document],
         embeddings: Optional[OpenAIEmbeddings] = None,
     ) -> List[List[float]]:
-        """
-        Embed the document chunks using OpenAI embeddings.
-        """
+        """Embed the document chunks using OpenAI embeddings."""
         logger.info(f"Starting embedding generation for {len(chunks)} chunks")
         try:
             if embeddings is None:
@@ -154,9 +150,7 @@ class DocumentLoader(BaseLoader):
         vector_store: Any = None,
         clear_existing: bool = False,
     ) -> List[str]:
-        """
-        Load the PDF file, chunk it, and embed the chunks into a vector store.
-        """
+        """Load the PDF file, chunk it, and embed the chunks into a vector store."""
         logger.info(f"Starting complete document loading pipeline for {self.file_path}")
         try:
             # Extract text from PDF
