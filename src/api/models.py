@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional, List
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -9,7 +9,7 @@ class BaseIngestPDFRequest(BaseModel):
 
     @field_validator("pdf_path")
     @classmethod
-    def validate_pdf_path(cls, v):
+    def validate_pdf_path(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("pdf_path cannot be empty or whitespace only")
         if not v.lower().endswith(".pdf"):
@@ -28,14 +28,14 @@ class IngestPDFRequest(BaseIngestPDFRequest):
     )
 
     @model_validator(mode="after")
-    def validate_chunk_overlap(self):
+    def validate_chunk_overlap(self) -> "IngestPDFRequest":
         if self.chunk_overlap >= self.chunk_size:
             raise ValueError("chunk_overlap must be less than chunk_size")
         return self
 
     @field_validator("collection_name")
     @classmethod
-    def validate_collection_name(cls, v):
+    def validate_collection_name(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("collection_name cannot be empty or whitespace only")
         return v.strip()
@@ -54,19 +54,19 @@ class IngestPDFResponse(BaseModel):
 
 
 class IngestPDFGraphResponse(IngestPDFResponse):
-    kg_stats: Optional[dict] = None
+    kg_stats: Optional[dict[str, Any]] = None
 
 
 class SchemaUpdateRequest(BaseModel):
-    node_types: list = Field(..., description="List of node types", min_items=1)
-    relationship_types: list = Field(
-        ..., description="List of relationship types", min_items=1
+    node_types: List[str] = Field(..., description="List of node types")
+    relationship_types: List[str] = Field(
+        ..., description="List of relationship types"
     )
-    patterns: list = Field(..., description="List of patterns")
+    patterns: List[str] = Field(..., description="List of patterns")
 
     @field_validator("node_types")
     @classmethod
-    def validate_node_types(cls, v):
+    def validate_node_types(cls, v: List[str]) -> List[str]:
         if not v:
             raise ValueError("node_types cannot be empty")
         for i, node_type in enumerate(v):
@@ -76,7 +76,7 @@ class SchemaUpdateRequest(BaseModel):
 
     @field_validator("relationship_types")
     @classmethod
-    def validate_relationship_types(cls, v):
+    def validate_relationship_types(cls, v: List[str]) -> List[str]:
         if not v:
             raise ValueError("relationship_types cannot be empty")
         for i, rel_type in enumerate(v):
@@ -96,28 +96,28 @@ class CreateIndexRequest(BaseModel):
 
     @field_validator("index_name")
     @classmethod
-    def validate_index_name(cls, v):
+    def validate_index_name(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("index_name cannot be empty or whitespace only")
         return v.strip()
 
     @field_validator("label")
     @classmethod
-    def validate_label(cls, v):
+    def validate_label(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("label cannot be empty or whitespace only")
         return v.strip()
 
     @field_validator("embedding_property")
     @classmethod
-    def validate_embedding_property(cls, v):
+    def validate_embedding_property(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("embedding_property cannot be empty or whitespace only")
         return v.strip()
 
     @field_validator("similarity_fn")
     @classmethod
-    def validate_similarity_fn(cls, v):
+    def validate_similarity_fn(cls, v: str) -> str:
         valid_functions = ["cosine", "euclidean", "dot"]
         if v not in valid_functions:
             raise ValueError(

@@ -14,10 +14,10 @@ class QdrantVectorDB(BaseVectorDB):
         self,
         url: str = "http://localhost:6333",
         api_key: Optional[str] = None,
-        default_collection_name: str = None,
+        default_collection_name: Optional[str] = None,
         distance: Distance = Distance.COSINE,
         embedding_size: int = 3072,
-    ):
+    ) -> None:
         self.url = os.getenv("QDRANT_URL", "http://localhost:6333")
 
         if api_key is None:
@@ -46,9 +46,9 @@ class QdrantVectorDB(BaseVectorDB):
     def create_collection(
         self,
         collection_name: str,
-        embedding_size: Optional[int] = None,
+        embedding_size: int,
         distance: Distance = Distance.COSINE,
-    ):
+    ) -> None:
         """Create a collection in the Qdrant vector database."""
         if not self.client.collection_exists(collection_name):
             self.client.create_collection(
@@ -64,7 +64,7 @@ class QdrantVectorDB(BaseVectorDB):
         collection_name: str,
         embedding_size: int = 3072,
         distance: Distance = Distance.COSINE,
-    ):
+    ) -> None:
         """Clear the specified collection in the Qdrant vector database."""
         if self.client.collection_exists(collection_name):
             self.client.recreate_collection(

@@ -1,8 +1,8 @@
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Literal
 
-from neo4j import GraphDatabase
+from neo4j import GraphDatabase, Driver
 from neo4j_graphrag.embeddings import OpenAIEmbeddings
 from neo4j_graphrag.experimental.components.resolver import SpaCySemanticMatchResolver
 from neo4j_graphrag.experimental.pipeline.kg_builder import SimpleKGPipeline
@@ -13,7 +13,7 @@ from neo4j_graphrag.llm import OpenAILLM
 class Neo4jConnection:
     """Simple Neo4j connection class that manages the driver and provides basic functionality."""
 
-    def __init__(self, uri: str, user: str, password: str, database: str = "neo4j"):
+    def __init__(self, uri: str, user: str, password: str, database: str = "neo4j") -> None:
         """
         Initialize Neo4j connection.
 
@@ -27,9 +27,9 @@ class Neo4jConnection:
         self.user = user
         self.password = password
         self.database = database
-        self._driver: Optional[GraphDatabase.driver] = None
+        self._driver: Optional[Driver] = None
 
-    def connect(self):
+    def connect(self) -> None:
         """Establish connection to Neo4j database."""
         try:
             self._driver = GraphDatabase.driver(
@@ -43,36 +43,38 @@ class Neo4jConnection:
             raise
 
     @property
-    def driver(self):
+    def driver(self) -> Driver:
         """Get the Neo4j driver instance."""
         if self._driver is None:
             self.connect()
+        if self._driver is None:
+            raise RuntimeError("Failed to establish connection")
         return self._driver
 
-    def close(self):
+    def close(self) -> None:
         """Close the connection to Neo4j."""
         if self._driver:
             self._driver.close()
             self._driver = None
             logging.info("Neo4j connection closed")
 
-    def execute_read(self, query: str, parameters: dict = None):
+    def execute_read(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> Any:
         """Execute a read query."""
         with self.driver.session(database=self.database) as session:
             return session.run(query, parameters or {})
 
-    def execute_write(self, query: str, parameters: dict = None):
+    def execute_write(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> Any:
         """Execute a write query."""
         with self.driver.session(database=self.database) as session:
             return session.run(query, parameters or {})
 
-    def clear_database(self):
+    def clear_database(self) -> None:
         """Clear all nodes and relationships from the database."""
         logging.warning("Clearing entire database...")
         self.execute_write("MATCH (n) DETACH DELETE n")
         logging.info("Database cleared")
 
-    def create_database(self, database_name: str):
+    def create_database(self, database_name: str) -> None:
         """Create a new Neo4j database."""
         try:
             # Check if multi-database is supported
@@ -101,7 +103,7 @@ class Neo4jConnection:
                 logging.error(f"Error creating database: {e}")
                 raise
 
-    def delete_database(self, database_name: str):
+    def delete_database(self, database_name: str) -> None:
         """Delete a Neo4j database."""
         try:
             # Check if multi-database is supported
@@ -157,7 +159,7 @@ class Neo4jConnection:
             # Use system database for admin operations
             with self.driver.session(database="system") as session:
 
-                def _get_databases(tx):
+                def _get_databases(tx: Any) -> List[Dict[str, Any]]:
                     result = tx.run("SHOW DATABASES")
                     databases = []
                     for record in result:
@@ -229,7 +231,7 @@ class Neo4jConnection:
         )
 
     def create_entity_resolver(
-        self, resolve_properties: List[str] = None, similarity_threshold: float = 0.5
+        self, resolve_properties: Optional[List[str]] = None, similarity_threshold: float = 0.5
     ) -> SpaCySemanticMatchResolver:
         """
         Create a SpaCy entity resolver for post-processing.
@@ -346,7 +348,7 @@ class Neo4jConnection:
         label: str,
         embedding_property: str = "embedding",
         dimensions: int = 3072,
-        similarity_fn: str = "cosine",
+        similarity_fn: Literal["cosine", "euclidean"] = "cosine",
     ) -> None:
         """
         Create a vector index for similarity search.
@@ -368,11 +370,11 @@ class Neo4jConnection:
         )
         logging.info(f"Created vector index '{index_name}' for label '{label}'")
 
-    def __enter__(self):
+    def __enter__(self) -> "Neo4jConnection":
         """Context manager entry."""
         self.connect()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit."""
         self.close()

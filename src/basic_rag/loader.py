@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import List, Optional, Union, Any
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -9,7 +9,7 @@ from langchain_qdrant import QdrantVectorStore
 from langchain_text_splitters import CharacterTextSplitter
 from pypdf import PdfReader
 
-from basic_rag.base import BaseLoader, BaseVectorDB
+from basic_rag.base import BaseLoader
 from basic_rag.vector_db import QdrantVectorDB
 
 # Configure logging
@@ -20,9 +20,15 @@ load_dotenv()  # Load environment variables from .env file
 
 
 class DocumentLoader(BaseLoader):
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str) -> None:
         super().__init__(file_path)
         logger.info(f"Initialized DocumentLoader with file: {file_path}")
+
+    def load(self) -> List[str]:
+        """
+        Load the document and return its content as a list of strings.
+        """
+        return self._extract_text()
 
     def _extract_text(self) -> List[str]:
         """
@@ -113,7 +119,7 @@ class DocumentLoader(BaseLoader):
         self,
         chunks: List[Document],
         embeddings: Optional[OpenAIEmbeddings] = None,
-    ) -> List[str]:
+    ) -> List[List[float]]:
         """
         Embed the document chunks using OpenAI embeddings.
         """
@@ -145,7 +151,7 @@ class DocumentLoader(BaseLoader):
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         embeddings: Optional[OpenAIEmbeddings] = None,
-        vector_store: Optional[BaseVectorDB] = None,
+        vector_store: Any = None,
         clear_existing: bool = False,
     ) -> List[str]:
         """

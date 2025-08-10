@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Any
 
 
 class BaseLoader:
     """Base class for document loaders."""
 
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str) -> None:
         self.file_path = file_path
 
     @abstractmethod
@@ -20,11 +20,11 @@ class BaseLoader:
 class BaseVectorDB(ABC):
     """Base class for vector databases."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         raise NotImplementedError("This class should not be instantiated directly.")
 
     @abstractmethod
-    def create_collection(self):
+    def create_collection(self, collection_name: str, embedding_size: int, distance: Any = None) -> None:
         """
         Create a collection in the vector database.
         """
