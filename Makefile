@@ -22,7 +22,7 @@ lint:  ## Run flake8 linting
 	uv run flake8 src/
 
 type-check:  ## Run mypy type checking
-	MYPYPATH=src uv run mypy --namespace-packages src/
+	MYPYPATH=src uv run mypy --namespace-packages --no-incremental src/
 
 check: format-check lint type-check  ## Run all checks (format, lint, type)
 
