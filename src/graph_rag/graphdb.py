@@ -1,8 +1,9 @@
 """Neo4j graph database connection and operations module."""
-import logging
-from typing import Any, Dict, List, Optional, Literal
 
-from neo4j import GraphDatabase, Driver
+import logging
+from typing import Any, Dict, List, Literal, Optional
+
+from neo4j import Driver, GraphDatabase
 from neo4j_graphrag.embeddings import OpenAIEmbeddings
 from neo4j_graphrag.experimental.components.resolver import SpaCySemanticMatchResolver
 from neo4j_graphrag.experimental.pipeline.kg_builder import SimpleKGPipeline
@@ -13,7 +14,9 @@ from neo4j_graphrag.llm import OpenAILLM
 class Neo4jConnection:
     """Simple Neo4j connection class that manages the driver and provides basic functionality."""
 
-    def __init__(self, uri: str, user: str, password: str, database: str = "neo4j") -> None:
+    def __init__(
+        self, uri: str, user: str, password: str, database: str = "neo4j"
+    ) -> None:
         """Initialize Neo4j connection.
 
         Args:
@@ -57,12 +60,16 @@ class Neo4jConnection:
             self._driver = None
             logging.info("Neo4j connection closed")
 
-    def execute_read(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> Any:
+    def execute_read(
+        self, query: str, parameters: Optional[Dict[str, Any]] = None
+    ) -> Any:
         """Execute a read query."""
         with self.driver.session(database=self.database) as session:
             return session.run(query, parameters or {})
 
-    def execute_write(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> Any:
+    def execute_write(
+        self, query: str, parameters: Optional[Dict[str, Any]] = None
+    ) -> Any:
         """Execute a write query."""
         with self.driver.session(database=self.database) as session:
             return session.run(query, parameters or {})
@@ -229,7 +236,9 @@ class Neo4jConnection:
         )
 
     def create_entity_resolver(
-        self, resolve_properties: Optional[List[str]] = None, similarity_threshold: float = 0.5
+        self,
+        resolve_properties: Optional[List[str]] = None,
+        similarity_threshold: float = 0.5,
     ) -> SpaCySemanticMatchResolver:
         """Create a SpaCy entity resolver for post-processing.
 

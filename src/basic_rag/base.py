@@ -1,6 +1,7 @@
 """Base classes for document loaders and vector databases."""
+
 from abc import ABC, abstractmethod
-from typing import List, Any
+from typing import Any, List
 
 
 class BaseLoader:
@@ -27,6 +28,8 @@ class BaseVectorDB(ABC):
         raise NotImplementedError("This class should not be instantiated directly.")
 
     @abstractmethod
-    def create_collection(self, collection_name: str, embedding_size: int, distance: Any = None) -> None:
+    def create_collection(
+        self, collection_name: str, embedding_size: int, distance: Any = None
+    ) -> None:
         """Create a collection in the vector database."""
         pass

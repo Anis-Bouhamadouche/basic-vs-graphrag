@@ -1,4 +1,5 @@
 """Utility functions for basic RAG operations."""
+
 from typing import List
 from uuid import uuid4
 

@@ -1,6 +1,7 @@
 """Document loading and text processing utilities."""
+
 import logging
-from typing import List, Optional, Any
+from typing import Any, List, Optional
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -113,7 +114,7 @@ class DocumentLoader(BaseLoader):
             logger.error(f"Failed to chunk text: {str(e)}")
             raise
 
-    def _embed_documents(
+    def embed_documents(
         self,
         chunks: List[Document],
         embeddings: Optional[OpenAIEmbeddings] = None,
