@@ -1,11 +1,13 @@
 """Pydantic models for API request and response validation."""
-from typing import Any, Optional, List
+
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class BaseIngestPDFRequest(BaseModel):
     """Base model for PDF ingestion requests."""
+
     pdf_path: str = Field(..., description="Path to the PDF file", min_length=1)
     clear_existing: bool = Field(False, description="Whether to clear existing data")
 
@@ -22,6 +24,7 @@ class BaseIngestPDFRequest(BaseModel):
 
 class IngestPDFRequest(BaseIngestPDFRequest):
     """Model for PDF ingestion request with vector store configuration."""
+
     chunk_size: int = Field(1000, description="Size of text chunks", gt=0, le=10000)
     chunk_overlap: int = Field(200, description="Overlap between chunks", ge=0)
     collection_name: str = Field(
@@ -49,6 +52,7 @@ class IngestPDFRequest(BaseIngestPDFRequest):
 
 class IngestPDFGraphRequest(IngestPDFRequest):
     """Model for PDF ingestion request for graph RAG."""
+
     llm_model_name: str = Field("gpt-4o", description="LLM model for graph processing")
     run_entity_resolution: bool = Field(
         True, description="Whether to run entity resolution"
@@ -57,21 +61,22 @@ class IngestPDFGraphRequest(IngestPDFRequest):
 
 class IngestPDFResponse(BaseModel):
     """Base response model for PDF ingestion."""
+
     message: str
     status: str
 
 
 class IngestPDFGraphResponse(IngestPDFResponse):
     """Response model for graph RAG PDF ingestion."""
+
     kg_stats: Optional[dict[str, Any]] = None
 
 
 class SchemaUpdateRequest(BaseModel):
     """Model for schema update requests."""
+
     node_types: List[str] = Field(..., description="List of node types")
-    relationship_types: List[str] = Field(
-        ..., description="List of relationship types"
-    )
+    relationship_types: List[str] = Field(..., description="List of relationship types")
     patterns: List[str] = Field(..., description="List of patterns")
 
     @field_validator("node_types")
@@ -99,6 +104,7 @@ class SchemaUpdateRequest(BaseModel):
 
 class CreateIndexRequest(BaseModel):
     """Model for vector index creation requests."""
+
     index_name: str = Field(..., description="Name of the vector index", min_length=1)
     label: str = Field(..., description="Neo4j node label", min_length=1)
     embedding_property: str = Field(
@@ -141,3 +147,49 @@ class CreateIndexRequest(BaseModel):
                 f'similarity_fn must be one of: {", ".join(valid_functions)}'
             )
         return v
+
+
+class ChatRequest(BaseModel):
+    """Model for chat request."""
+
+    question: str = Field(..., description="User question", min_length=1)
+    collection_name: str = Field(
+        "eu_ai_act", description="Name of the vector store collection", min_length=1
+    )
+    top_k: int = Field(
+        3, description="Number of top documents to retrieve", gt=0, le=20
+    )
+    temperature: float = Field(0.1, description="LLM temperature", ge=0.0, le=2.0)
+    max_tokens: int = Field(
+        1000, description="Maximum tokens in response", gt=0, le=4000
+    )
+    chat_model_name: str = Field("gpt-4o", description="OpenAI chat model name")
+    embedding_model: str = Field(
+        "text-embedding-3-large", description="OpenAI embedding model name"
+    )
+
+    @field_validator("question")
+    @classmethod
+    def validate_question(cls, v: str) -> str:
+        """Validate question field."""
+        if not v.strip():
+            raise ValueError("question cannot be empty or whitespace only")
+        return v.strip()
+
+    @field_validator("collection_name")
+    @classmethod
+    def validate_collection_name(cls, v: str) -> str:
+        """Validate collection name field."""
+        if not v.strip():
+            raise ValueError("collection_name cannot be empty or whitespace only")
+        return v.strip()
+
+
+class ChatResponse(BaseModel):
+    """Model for chat response."""
+
+    answer: str = Field(..., description="AI-generated answer")
+    context_documents: List[str] = Field(
+        ..., description="Context documents used for generation"
+    )
+    metadata: dict = Field(..., description="Additional metadata about the response")
