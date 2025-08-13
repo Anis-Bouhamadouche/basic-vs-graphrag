@@ -1,8 +1,9 @@
 """FastAPI application for basic vs graph RAG comparison."""
+
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Literal, cast, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, Literal, Optional, cast
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -11,6 +12,8 @@ from fastapi.responses import JSONResponse
 from langchain_openai import OpenAIEmbeddings
 
 from api.models import (
+    ChatRequest,
+    ChatResponse,
     CreateIndexRequest,
     IngestPDFGraphRequest,
     IngestPDFGraphResponse,
@@ -19,6 +22,7 @@ from api.models import (
     SchemaUpdateRequest,
 )
 from basic_rag.loader import DocumentLoader
+from basic_rag.rag import BasicRAGChat, RAGConfig
 from graph_rag.graphdb import Neo4jConnection
 
 load_dotenv()
@@ -88,7 +92,9 @@ app = FastAPI(
 
 # Global exception handlers
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
     """Handle Pydantic validation errors."""
     logger.error(f"Validation error for {request.url}: {exc}")
     return JSONResponse(
@@ -112,7 +118,9 @@ async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse
 
 
 @app.exception_handler(ConnectionError)
-async def connection_error_handler(request: Request, exc: ConnectionError) -> JSONResponse:
+async def connection_error_handler(
+    request: Request, exc: ConnectionError
+) -> JSONResponse:
     """Handle connection errors."""
     logger.error(f"Connection error for {request.url}: {exc}")
     return JSONResponse(
@@ -229,17 +237,17 @@ async def ingest_pdf_to_kg(request: IngestPDFGraphRequest) -> IngestPDFGraphResp
         if SCHEMA is None:
             raise HTTPException(
                 status_code=400,
-                detail="Schema must be created first. Call /create-schema endpoint."
+                detail="Schema must be created first. Call /create-schema endpoint.",
             )
         if not OPENAI_ENDPOINT:
             raise HTTPException(
                 status_code=500,
-                detail="OPENAI_ENDPOINT environment variable is required"
+                detail="OPENAI_ENDPOINT environment variable is required",
             )
         if not OPENAI_DEPLOYMENT_EMBEDDING:
             raise HTTPException(
                 status_code=500,
-                detail="OPENAI_DEPLOYMENT_EMBEDDING environment variable is required"
+                detail="OPENAI_DEPLOYMENT_EMBEDDING environment variable is required",
             )
 
         # Populate the knowledge graph
@@ -392,7 +400,7 @@ async def create_vector_index_endpoint(request: CreateIndexRequest) -> dict[str,
             if request.similarity_fn not in ["cosine", "euclidean"]:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid similarity_fn: {request.similarity_fn}. Must be 'cosine' or 'euclidean'"
+                    detail=f"Invalid similarity_fn: {request.similarity_fn}. Must be 'cosine' or 'euclidean'",
                 )
 
             neo4j_conn.create_vector_index(
@@ -400,7 +408,9 @@ async def create_vector_index_endpoint(request: CreateIndexRequest) -> dict[str,
                 label=request.label,
                 embedding_property=request.embedding_property,
                 dimensions=request.dimensions,
-                similarity_fn=cast("Literal['cosine', 'euclidean']", request.similarity_fn),
+                similarity_fn=cast(
+                    "Literal['cosine', 'euclidean']", request.similarity_fn
+                ),
             )
         except ValueError as e:
             logger.error(f"Invalid index parameters: {e}")
@@ -560,4 +570,78 @@ async def ingest_pdf(request: IngestPDFRequest) -> IngestPDFResponse:
         raise
     except Exception as e:
         logger.error(f"Unexpected error in ingest_pdf endpoint: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/basic-rag/chat", response_model=ChatResponse)
+async def chat_with_rag(request: ChatRequest) -> ChatResponse:
+    """Chat with the RAG system using the basic RAG implementation."""
+    try:
+        logger.info(f"Starting chat request: {request.question[:100]}...")
+
+        # Create RAG configuration from request parameters
+        try:
+            rag_config = RAGConfig(
+                collection_name=request.collection_name,
+                embedding_model=request.embedding_model,
+                top_k=request.top_k,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                chat_model_name=request.chat_model_name,
+            )
+        except Exception as e:
+            logger.error(f"Failed to create RAG configuration: {e}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid RAG configuration: {str(e)}"
+            )
+
+        # Initialize the RAG chat system
+        try:
+            rag_chat = BasicRAGChat(config=rag_config)
+        except Exception as e:
+            logger.error(f"Failed to initialize RAG chat system: {e}")
+            raise HTTPException(
+                status_code=503, detail=f"Failed to initialize RAG system: {str(e)}"
+            )
+
+        # Get the answer from the RAG system
+        try:
+            result = rag_chat.get_answer(request.question, include_context=True)
+            answer, context_documents = result
+        except ValueError as e:
+            logger.error(f"Invalid question or parameters: {e}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid question or parameters: {str(e)}"
+            )
+        except ConnectionError as e:
+            logger.error(f"Connection error with vector store or LLM: {e}")
+            raise HTTPException(status_code=503, detail="External service unavailable")
+        except Exception as e:
+            logger.error(f"Unexpected error during RAG processing: {e}")
+            raise HTTPException(
+                status_code=500, detail="Internal server error during RAG processing"
+            )
+
+        # Prepare metadata
+        metadata = {
+            "model": request.chat_model_name,
+            "embedding_model": request.embedding_model,
+            "collection": request.collection_name,
+            "top_k": request.top_k,
+            "temperature": request.temperature,
+            "max_tokens": request.max_tokens,
+        }
+
+        logger.info("Chat request completed successfully")
+
+        return ChatResponse(
+            answer=answer,
+            context_documents=context_documents,
+            metadata=metadata,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in chat endpoint: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
