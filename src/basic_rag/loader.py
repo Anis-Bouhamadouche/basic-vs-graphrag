@@ -1,14 +1,18 @@
+"""Document loading and text processing utilities."""
+
 import logging
+from typing import Any, List, Optional
 from uuid import uuid4
-from langchain_openai import OpenAIEmbeddings
-from langchain_text_splitters import CharacterTextSplitter
-from langchain_core.documents import Document
-from pypdf import PdfReader
-from typing import Optional, List
-from basic_rag.base import BaseLoader, BaseVectorDB
-from basic_rag.vector_db import QdrantVectorDB
-from langchain_qdrant import QdrantVectorStore
+
 from dotenv import load_dotenv
+from langchain_core.documents import Document
+from langchain_openai import OpenAIEmbeddings
+from langchain_qdrant import QdrantVectorStore
+from langchain_text_splitters import CharacterTextSplitter
+from pypdf import PdfReader
+
+from basic_rag.base import BaseLoader
+from basic_rag.vector_db import QdrantVectorDB
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -18,14 +22,19 @@ load_dotenv()  # Load environment variables from .env file
 
 
 class DocumentLoader(BaseLoader):
-    def __init__(self, file_path: str):
+    """Document loader class for processing PDF files."""
+
+    def __init__(self, file_path: str) -> None:
+        """Initialize the document loader with a file path."""
         super().__init__(file_path)
         logger.info(f"Initialized DocumentLoader with file: {file_path}")
 
+    def load(self) -> List[str]:
+        """Load the document and return its content as a list of strings."""
+        return self._extract_text()
+
     def _extract_text(self) -> List[str]:
-        """
-        Load text from a PDF file.
-        """
+        """Load text from a PDF file."""
         logger.info(f"Starting text extraction from PDF: {self.file_path}")
         try:
             pdf_reader = PdfReader(self.file_path)
@@ -48,9 +57,7 @@ class DocumentLoader(BaseLoader):
     def _chunk(
         self, text: List[str], chunk_size: int = 1000, chunk_overlap: int = 200
     ) -> List[Document]:
-        """
-        Chunk the text into smaller pieces and return as Document objects.
-        """
+        """Chunk the text into smaller pieces and return as Document objects."""
         logger.info(
             f"Starting text chunking with chunk_size={chunk_size}, chunk_overlap={chunk_overlap}"
         )
@@ -107,14 +114,12 @@ class DocumentLoader(BaseLoader):
             logger.error(f"Failed to chunk text: {str(e)}")
             raise
 
-    def _embed_documents(
+    def embed_documents(
         self,
         chunks: List[Document],
         embeddings: Optional[OpenAIEmbeddings] = None,
-    ) -> List[str]:
-        """
-        Embed the document chunks using OpenAI embeddings.
-        """
+    ) -> List[List[float]]:
+        """Embed the document chunks using OpenAI embeddings."""
         logger.info(f"Starting embedding generation for {len(chunks)} chunks")
         try:
             if embeddings is None:
@@ -143,12 +148,10 @@ class DocumentLoader(BaseLoader):
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         embeddings: Optional[OpenAIEmbeddings] = None,
-        vector_store: Optional[BaseVectorDB] = None,
+        vector_store: Any = None,
         clear_existing: bool = False,
     ) -> List[str]:
-        """
-        Load the PDF file, chunk it, and embed the chunks into a vector store.
-        """
+        """Load the PDF file, chunk it, and embed the chunks into a vector store."""
         logger.info(f"Starting complete document loading pipeline for {self.file_path}")
         try:
             # Extract text from PDF

@@ -1,22 +1,29 @@
-import os
+"""FastAPI application for basic vs graph RAG comparison."""
+
 import logging
-from langchain_openai import OpenAIEmbeddings
-from dotenv import load_dotenv
-from fastapi.responses import JSONResponse
+import os
 from contextlib import asynccontextmanager
-from graph_rag.graphdb import Neo4jConnection
-from basic_rag.loader import DocumentLoader
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Request
+from typing import Any, AsyncGenerator, Dict, Literal, Optional, cast
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from langchain_openai import OpenAIEmbeddings
+
 from api.models import (
+    ChatRequest,
+    ChatResponse,
+    CreateIndexRequest,
     IngestPDFGraphRequest,
     IngestPDFGraphResponse,
     IngestPDFRequest,
     IngestPDFResponse,
-    CreateIndexRequest,
     SchemaUpdateRequest,
 )
-
+from basic_rag.loader import DocumentLoader
+from basic_rag.rag import BasicRAGChat, RAGConfig
+from graph_rag.graphdb import Neo4jConnection
 
 load_dotenv()
 
@@ -38,19 +45,27 @@ OPENAI_DEPLOYMENT_EMBEDDING = os.getenv("OPENAI_DEPLOYMENT_EMBEDDING")
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
-SCHEMA = None
+SCHEMA: Optional[Dict[str, Any]] = None
 
 # Global Neo4j connection
 neo4j_conn = None
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Handle application startup and shutdown."""
     global neo4j_conn
 
     # Startup
     try:
+        # Validate environment variables
+        if not NEO4J_URI:
+            raise ValueError("NEO4J_URI environment variable is required")
+        if not NEO4J_USERNAME:
+            raise ValueError("NEO4J_USERNAME environment variable is required")
+        if not NEO4J_PASSWORD:
+            raise ValueError("NEO4J_PASSWORD environment variable is required")
+
         neo4j_conn = Neo4jConnection(
             uri=NEO4J_URI, user=NEO4J_USERNAME, password=NEO4J_PASSWORD
         )
@@ -77,7 +92,9 @@ app = FastAPI(
 
 # Global exception handlers
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
     """Handle Pydantic validation errors."""
     logger.error(f"Validation error for {request.url}: {exc}")
     return JSONResponse(
@@ -91,7 +108,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 @app.exception_handler(ValueError)
-async def value_error_handler(request: Request, exc: ValueError):
+async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
     """Handle ValueError exceptions."""
     logger.error(f"Value error for {request.url}: {exc}")
     return JSONResponse(
@@ -101,7 +118,9 @@ async def value_error_handler(request: Request, exc: ValueError):
 
 
 @app.exception_handler(ConnectionError)
-async def connection_error_handler(request: Request, exc: ConnectionError):
+async def connection_error_handler(
+    request: Request, exc: ConnectionError
+) -> JSONResponse:
     """Handle connection errors."""
     logger.error(f"Connection error for {request.url}: {exc}")
     return JSONResponse(
@@ -114,7 +133,7 @@ async def connection_error_handler(request: Request, exc: ConnectionError):
 
 
 @app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
+async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Handle all other unhandled exceptions."""
     logger.error(f"Unhandled exception for {request.url}: {exc}", exc_info=True)
     return JSONResponse(
@@ -124,7 +143,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 @app.get("/")
-async def hello_world():
+async def hello_world() -> dict[str, Any]:
     """Hello world endpoint that tests database connectivity."""
     try:
         if not neo4j_conn:
@@ -155,7 +174,7 @@ async def hello_world():
 
 
 @app.get("/health")
-async def health_check():
+async def health_check() -> dict[str, str]:
     """Health check endpoint."""
     try:
         if not neo4j_conn:
@@ -176,9 +195,8 @@ async def health_check():
 
 
 @app.post("/graph-rag/ingest-pdf", response_model=IngestPDFGraphResponse)
-async def ingest_pdf_to_kg(request: IngestPDFGraphRequest):
-    """
-    Ingest a PDF file into the knowledge graph.
+async def ingest_pdf_to_kg(request: IngestPDFGraphRequest) -> IngestPDFGraphResponse:
+    """Ingest a PDF file into the knowledge graph.
 
     This endpoint processes a PDF file and populates the knowledge graph
     using schema and OpenAI services.
@@ -215,6 +233,23 @@ async def ingest_pdf_to_kg(request: IngestPDFGraphRequest):
                 status_code=400, detail=f"Cannot access PDF file: {str(e)}"
             )
 
+        # Validate required parameters before attempting population
+        if SCHEMA is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Schema must be created first. Call /create-schema endpoint.",
+            )
+        if not OPENAI_ENDPOINT:
+            raise HTTPException(
+                status_code=500,
+                detail="OPENAI_ENDPOINT environment variable is required",
+            )
+        if not OPENAI_DEPLOYMENT_EMBEDDING:
+            raise HTTPException(
+                status_code=500,
+                detail="OPENAI_DEPLOYMENT_EMBEDDING environment variable is required",
+            )
+
         # Populate the knowledge graph
         try:
             await neo4j_conn.populate_kg_from_pdf(
@@ -245,7 +280,7 @@ async def ingest_pdf_to_kg(request: IngestPDFGraphRequest):
             kg_stats = neo4j_conn.get_kg_stats()
         except Exception as e:
             logger.warning(f"Failed to get KG stats after ingestion: {e}")
-            kg_stats = {"error": "Could not retrieve statistics"}
+            kg_stats = {"total_nodes": 0, "total_relationships": 0, "error_count": 1}
 
         logger.info("PDF ingestion to knowledge graph completed successfully")
 
@@ -279,7 +314,7 @@ async def ingest_pdf_to_kg(request: IngestPDFGraphRequest):
 
 
 @app.get("/graph-rag/stats")
-async def get_kg_stats():
+async def get_kg_stats() -> dict[str, Any]:
     """Get knowledge graph statistics."""
     try:
         if not neo4j_conn:
@@ -301,7 +336,7 @@ async def get_kg_stats():
 
 
 @app.delete("/graph-rag/clear")
-async def clear_knowledge_graph():
+async def clear_knowledge_graph() -> dict[str, str]:
     """Clear all data from the knowledge graph."""
     try:
         if not neo4j_conn:
@@ -324,7 +359,7 @@ async def clear_knowledge_graph():
 
 
 @app.get("/graph-rag/schema")
-async def get_schema():
+async def get_schema() -> dict[str, Any]:
     """Get the current knowledge graph schema configuration."""
     return {
         "status": "success",
@@ -334,9 +369,8 @@ async def get_schema():
 
 
 @app.post("/graph-rag/create-index")
-async def create_vector_index_endpoint(request: CreateIndexRequest):
-    """
-    Create a vector index for similarity search.
+async def create_vector_index_endpoint(request: CreateIndexRequest) -> dict[str, Any]:
+    """Create a vector index for similarity search.
 
     This endpoint creates a vector index on a specific node label
     to enable similarity search functionality.
@@ -362,12 +396,21 @@ async def create_vector_index_endpoint(request: CreateIndexRequest):
 
         # Create the vector index
         try:
+            # Validate similarity function
+            if request.similarity_fn not in ["cosine", "euclidean"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid similarity_fn: {request.similarity_fn}. Must be 'cosine' or 'euclidean'",
+                )
+
             neo4j_conn.create_vector_index(
                 index_name=request.index_name,
                 label=request.label,
                 embedding_property=request.embedding_property,
                 dimensions=request.dimensions,
-                similarity_fn=request.similarity_fn,
+                similarity_fn=cast(
+                    "Literal['cosine', 'euclidean']", request.similarity_fn
+                ),
             )
         except ValueError as e:
             logger.error(f"Invalid index parameters: {e}")
@@ -417,7 +460,7 @@ async def create_vector_index_endpoint(request: CreateIndexRequest):
 
 
 @app.put("/graph-rag/schema")
-async def update_schema(request: SchemaUpdateRequest):
+async def update_schema(request: SchemaUpdateRequest) -> dict[str, Any]:
     """Update the knowledge graph schema configuration."""
     global SCHEMA
 
@@ -453,10 +496,8 @@ async def update_schema(request: SchemaUpdateRequest):
 
 
 @app.post("/basic-rag/ingest-pdf", response_model=IngestPDFResponse)
-async def ingest_pdf(request: IngestPDFRequest):
-    """
-    This endpoint processes a PDF file and stores its content in a vector store.
-    """
+async def ingest_pdf(request: IngestPDFRequest) -> IngestPDFResponse:
+    """Process a PDF file and store its content in a vector store."""
     try:
         # Check if PDF file exists (additional check beyond Pydantic validation)
         if not os.path.exists(request.pdf_path):
@@ -529,4 +570,78 @@ async def ingest_pdf(request: IngestPDFRequest):
         raise
     except Exception as e:
         logger.error(f"Unexpected error in ingest_pdf endpoint: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/basic-rag/chat", response_model=ChatResponse)
+async def chat_with_rag(request: ChatRequest) -> ChatResponse:
+    """Chat with the RAG system using the basic RAG implementation."""
+    try:
+        logger.info(f"Starting chat request: {request.question[:100]}...")
+
+        # Create RAG configuration from request parameters
+        try:
+            rag_config = RAGConfig(
+                collection_name=request.collection_name,
+                embedding_model=request.embedding_model,
+                top_k=request.top_k,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                chat_model_name=request.chat_model_name,
+            )
+        except Exception as e:
+            logger.error(f"Failed to create RAG configuration: {e}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid RAG configuration: {str(e)}"
+            )
+
+        # Initialize the RAG chat system
+        try:
+            rag_chat = BasicRAGChat(config=rag_config)
+        except Exception as e:
+            logger.error(f"Failed to initialize RAG chat system: {e}")
+            raise HTTPException(
+                status_code=503, detail=f"Failed to initialize RAG system: {str(e)}"
+            )
+
+        # Get the answer from the RAG system
+        try:
+            result = rag_chat.get_answer(request.question, include_context=True)
+            answer, context_documents = result
+        except ValueError as e:
+            logger.error(f"Invalid question or parameters: {e}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid question or parameters: {str(e)}"
+            )
+        except ConnectionError as e:
+            logger.error(f"Connection error with vector store or LLM: {e}")
+            raise HTTPException(status_code=503, detail="External service unavailable")
+        except Exception as e:
+            logger.error(f"Unexpected error during RAG processing: {e}")
+            raise HTTPException(
+                status_code=500, detail="Internal server error during RAG processing"
+            )
+
+        # Prepare metadata
+        metadata = {
+            "model": request.chat_model_name,
+            "embedding_model": request.embedding_model,
+            "collection": request.collection_name,
+            "top_k": request.top_k,
+            "temperature": request.temperature,
+            "max_tokens": request.max_tokens,
+        }
+
+        logger.info("Chat request completed successfully")
+
+        return ChatResponse(
+            answer=answer,
+            context_documents=context_documents,
+            metadata=metadata,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in chat endpoint: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

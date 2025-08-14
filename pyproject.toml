@@ -1,0 +1,138 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "basic-vs-graphrag"
+version = "0.1.0"
+description = "Comparison between basic RAG and GraphRAG approaches"
+readme = "README.md"
+requires-python = ">=3.11"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+dependencies = [
+    "neo4j-graphrag[openai]",
+    "langchain-openai",
+    "transformers",
+    "datasets",
+    "torch",
+    "neo4j-graphrag[nlp]",
+    "qdrant-client",
+    "tenacity",
+    "langgraph",
+    "langchain-community",
+    "langchain",
+    "pypdf",
+    "fastapi",
+    "uvicorn[standard]",
+    "python-dotenv",
+    "langchain-qdrant",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy",
+    "black",
+    "isort",
+    "flake8",
+    "flake8-docstrings",
+    "flake8-type-checking",
+    "pre-commit",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "mypy",
+    "black",
+    "isort",
+    "flake8",
+    "flake8-docstrings",
+    "flake8-type-checking",
+    "pre-commit",
+]
+
+# Black configuration
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+# isort configuration
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["src"]
+skip_glob = ["**/__pycache__/*", "**/.*"]
+
+# mypy configuration
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+namespace_packages = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = [
+    "neo4j_graphrag.*",
+    "langchain.*",
+    "langgraph.*",
+    "qdrant_client.*",
+    "transformers.*",
+    "datasets.*",
+    "torch.*",
+    "pypdf.*",
+    "tenacity.*",
+]
+ignore_missing_imports = true
+
+# Coverage configuration (optional)
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/.*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
