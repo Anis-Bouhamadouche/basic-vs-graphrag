@@ -16,6 +16,8 @@ from api.models import (
     ChatRequest,
     ChatResponse,
     CreateIndexRequest,
+    GraphResolutionRequest,
+    GraphResolutionResponse,
     IngestPDFGraphRequest,
     IngestPDFGraphResponse,
     IngestPDFRequest,
@@ -348,6 +350,74 @@ async def get_kg_stats() -> dict[str, Any]:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@app.post("/graph-rag/resolve-entities", response_model=GraphResolutionResponse)
+async def resolve_graph_entities(request: GraphResolutionRequest) -> GraphResolutionResponse:
+    """Resolve entities in the knowledge graph using SpaCy semantic matching.
+    
+    This endpoint runs entity resolution to merge similar entities based on 
+    semantic similarity of their properties.
+    """
+    import time
+    
+    try:
+        if not neo4j_conn:
+            raise HTTPException(
+                status_code=500, detail="Database connection not available"
+            )
+
+        logger.info("Starting entity resolution process...")
+        start_time = time.time()
+        
+        # Get initial entity count for comparison
+        initial_stats = neo4j_conn.get_kg_stats()
+        initial_entities = initial_stats.get("total_nodes", 0)
+        
+        # Create entity resolver with provided configuration
+        resolver = neo4j_conn.create_entity_resolver(
+            resolve_properties=request.resolve_properties,
+            similarity_threshold=request.similarity_threshold
+        )
+        
+        # Run entity resolution
+        await resolver.run()
+        
+        # Get final entity count
+        final_stats = neo4j_conn.get_kg_stats()
+        final_entities = final_stats.get("total_nodes", 0)
+        
+        # Calculate resolved entities (entities that were merged/removed)
+        resolved_entities = max(0, initial_entities - final_entities)
+        
+        execution_time = time.time() - start_time
+        
+        logger.info(f"Entity resolution completed. Resolved {resolved_entities} entities in {execution_time:.2f}s")
+        
+        return GraphResolutionResponse(
+            message=f"Entity resolution completed successfully. Resolved {resolved_entities} duplicate entities.",
+            status="success",
+            resolved_entities=resolved_entities,
+            execution_time=execution_time
+        )
+        
+    except HTTPException:
+        raise
+    except ConnectionError as e:
+        logger.error(f"Database connection error during entity resolution: {e}")
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+    except ImportError as e:
+        logger.error(f"SpaCy dependency error: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail="SpaCy language model not available. Please ensure 'en_core_web_sm' model is installed in the container."
+        )
+    except Exception as e:
+        logger.error(f"Error during entity resolution: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error during entity resolution"
+        )
+
+
 @app.delete("/graph-rag/clear")
 async def clear_knowledge_graph() -> dict[str, str]:
     """Clear all data from the knowledge graph."""
@@ -657,4 +727,69 @@ async def chat_with_rag(request: ChatRequest) -> ChatResponse:
         raise
     except Exception as e:
         logger.error(f"Unexpected error in chat endpoint: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/graph-rag/chat", response_model=ChatResponse)
+async def chat_with_graph_rag(request: ChatRequest) -> ChatResponse:
+    """Chat with the GraphRAG system using the Neo4j implementation."""
+    try:
+        logger.info(f"Starting graph RAG chat request: {request.question[:100]}...")
+
+        # Validate Neo4j connection
+        if not neo4j_conn:
+            raise HTTPException(
+                status_code=500, detail="Database connection not available"
+            )
+
+        # Get the answer from the GraphRAG system
+        # Use collection_name as the index_name for GraphRAG
+        try:
+            result = neo4j_conn.get_answer(
+                question=request.question,
+                index_name=request.collection_name,  # Use collection_name as index_name
+                top_k=request.top_k,
+                temperature=request.temperature,
+                embedding_model=request.embedding_model,
+                chat_model=request.chat_model_name,  # Map chat_model_name to chat_model
+                include_context=True,
+            )
+            answer, context_documents = result
+        except ValueError as e:
+            logger.error(f"Invalid question or parameters: {e}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid question or parameters: {str(e)}"
+            )
+        except ConnectionError as e:
+            logger.error(f"Connection error with Neo4j or LLM: {e}")
+            raise HTTPException(status_code=503, detail="External service unavailable")
+        except Exception as e:
+            logger.error(f"Unexpected error during GraphRAG processing: {e}")
+            raise HTTPException(
+                status_code=500, detail="Internal server error during GraphRAG processing"
+            )
+
+        # Prepare metadata
+        metadata = {
+            "model": request.chat_model_name,
+            "embedding_model": request.embedding_model,
+            "index_name": request.collection_name,  # Show the index name used
+            "top_k": request.top_k,
+            "temperature": request.temperature,
+            "max_tokens": request.max_tokens,
+            "rag_type": "graph",
+        }
+
+        logger.info("Graph RAG chat request completed successfully")
+
+        return ChatResponse(
+            answer=answer,
+            context_documents=context_documents,
+            metadata=metadata,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in graph RAG chat endpoint: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

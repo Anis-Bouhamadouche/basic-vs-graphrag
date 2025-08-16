@@ -13,7 +13,7 @@ const DEFAULT_CONFIG: RAGConfig = {
   temperature: 0.1,
   max_tokens: 1000,
   collection_name: 'eu_ai_act',
-  chat_model_name: 'gpt-4o',
+  chat_model_name: 'gpt-4.1-mini',
   embedding_model: 'text-embedding-3-large',
 };
 

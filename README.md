@@ -17,13 +17,13 @@ Both implementations use the EU AI Act document as a knowledge base for complian
 - **Vector Store**: Qdrant for efficient similarity search
 - **Embeddings**: OpenAI text-embedding-3-large
 - **Framework**: LangGraph for state management
-- **LLM**: GPT-4o for response generation
+- **LLM**: gpt-4.1-mini for response generation
 
 ### GraphRAG Implementation  
 - **Graph Database**: Neo4j for relationship-aware storage
 - **Embeddings**: OpenAI embeddings with graph enhancement
 - **Framework**: Neo4j GraphRAG with NLP pipeline
-- **LLM**: GPT-4o with graph-augmented context
+- **LLM**: gpt-4.1-mini with graph-augmented context
 
 ## 🚀 Quick Start
 
@@ -155,7 +155,7 @@ config = RAGConfig(
     embedding_model="text-embedding-3-large", 
     top_k=10,
     temperature=0.0,
-    chat_model_name="gpt-4o"
+    chat_model_name="gpt-4.1-mini"
 )
 ```
 
