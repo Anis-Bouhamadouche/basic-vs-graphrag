@@ -9,6 +9,19 @@ interface MessageProps {
 
 const Message: React.FC<MessageProps> = ({ message, onShowSources }) => {
   const isUser = message.sender === 'user';
+  
+  // Get RAG type styling
+  const getRagTypeStyle = (ragType?: string) => {
+    if (!ragType) return '';
+    return ragType === 'basic' 
+      ? 'border-l-4 border-blue-500' 
+      : 'border-l-4 border-green-500';
+  };
+
+  const getRagTypeLabel = (ragType?: string) => {
+    if (!ragType) return '';
+    return ragType === 'basic' ? 'Basic RAG' : 'Graph RAG';
+  };
 
   return (
     <div className="w-full">
@@ -16,14 +29,31 @@ const Message: React.FC<MessageProps> = ({ message, onShowSources }) => {
         <div className={`max-w-2xl ${
           isUser 
             ? 'bg-gray-800 text-white' 
-            : 'bg-gray-100 text-gray-900'
+            : `bg-gray-100 text-gray-900 ${getRagTypeStyle(message.ragType)}`
         } rounded-2xl px-6 py-4`}>
+          {/* RAG Type Label */}
+          {!isUser && message.ragType && (
+            <div className="mb-2">
+              <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
+                message.ragType === 'basic' 
+                  ? 'bg-blue-100 text-blue-800' 
+                  : 'bg-green-100 text-green-800'
+              }`}>
+                {getRagTypeLabel(message.ragType)}
+              </span>
+            </div>
+          )}
+          
           <div className="flex items-start space-x-3">
             <div className="flex-shrink-0">
               <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
                 isUser 
                   ? 'bg-gray-700' 
-                  : 'bg-primary-900'
+                  : message.ragType === 'basic'
+                    ? 'bg-blue-600'
+                    : message.ragType === 'graph'
+                      ? 'bg-green-600'
+                      : 'bg-primary-900'
               }`}>
                 {isUser ? (
                   <UserIcon size={14} className="text-white" />
