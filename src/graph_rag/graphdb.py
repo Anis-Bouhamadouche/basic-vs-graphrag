@@ -7,8 +7,10 @@ from neo4j import Driver, GraphDatabase
 from neo4j_graphrag.embeddings import OpenAIEmbeddings
 from neo4j_graphrag.experimental.components.resolver import SpaCySemanticMatchResolver
 from neo4j_graphrag.experimental.pipeline.kg_builder import SimpleKGPipeline
+from neo4j_graphrag.generation import GraphRAG
 from neo4j_graphrag.indexes import create_vector_index
 from neo4j_graphrag.llm import OpenAILLM
+from neo4j_graphrag.retrievers import VectorCypherRetriever, VectorRetriever
 
 
 class Neo4jConnection:
@@ -63,16 +65,18 @@ class Neo4jConnection:
     def execute_read(
         self, query: str, parameters: Optional[Dict[str, Any]] = None
     ) -> Any:
-        """Execute a read query."""
+        """Execute a read query and return consumed result."""
         with self.driver.session(database=self.database) as session:
-            return session.run(query, parameters or {})
+            result = session.run(query, parameters or {})
+            return list(result)  # Consume the result before session closes
 
     def execute_write(
         self, query: str, parameters: Optional[Dict[str, Any]] = None
     ) -> Any:
-        """Execute a write query."""
+        """Execute a write query and return consumed result."""
         with self.driver.session(database=self.database) as session:
-            return session.run(query, parameters or {})
+            result = session.run(query, parameters or {})
+            return list(result)  # Consume the result before session closes
 
     def clear_database(self) -> None:
         """Clear all nodes and relationships from the database."""
@@ -194,7 +198,7 @@ class Neo4jConnection:
         api_key: str,
         endpoint: str,
         embedding_model_name: str,
-        chat_model_name: str = "gpt-4o",
+        chat_model_name: str = "gpt-4.1-mini",
     ) -> SimpleKGPipeline:
         """Create a SimpleKGPipeline for building knowledge graphs.
 
@@ -203,7 +207,7 @@ class Neo4jConnection:
             api_key: OpenAI API key
             endpoint: OpenAI endpoint URL
             embedding_model_name: OpenAI deployment name for embeddings
-            chat_model_name: Chat model name (default: "gpt-4o")
+            chat_model_name: Chat model name (default: "gpt-4.1-mini")
 
         Returns:
             Configured SimpleKGPipeline instance
@@ -263,7 +267,7 @@ class Neo4jConnection:
         api_key: str,
         endpoint: str,
         deployment: str,
-        llm_model_name: str = "gpt-4o",
+        llm_model_name: str = "gpt-4.1-mini",
         clear_existing: bool = False,
         run_entity_resolution: bool = True,
     ) -> None:
@@ -275,7 +279,7 @@ class Neo4jConnection:
             api_key: OpenAI API key
             endpoint: OpenAI endpoint URL
             deployment: OpenAI deployment name for embeddings
-            llm_model_name: LLM model name (default: "gpt-4o")
+            llm_model_name: LLM model name (default: "gpt-4.1-mini")
             clear_existing: Whether to clear existing data (default: False)
             run_entity_resolution: Whether to run entity resolution (default: True)
         """
@@ -314,11 +318,11 @@ class Neo4jConnection:
 
         # Get total node count
         result = self.execute_read("MATCH (n) RETURN count(n) as node_count")
-        stats["total_nodes"] = result.single()["node_count"]
+        stats["total_nodes"] = result[0]["node_count"] if result else 0
 
         # Get total relationship count
         result = self.execute_read("MATCH ()-[r]->() RETURN count(r) as rel_count")
-        stats["total_relationships"] = result.single()["rel_count"]
+        stats["total_relationships"] = result[0]["rel_count"] if result else 0
 
         # Get node counts by label
         result = self.execute_read(
@@ -329,7 +333,7 @@ class Neo4jConnection:
         """
         )
         stats["nodes_by_label"] = {
-            record["label"]: record["count"] for record in result
+            record["label"]: record["count"] for record in result if record["label"] is not None
         }
 
         # Get relationship counts by type
@@ -372,6 +376,63 @@ class Neo4jConnection:
             similarity_fn=similarity_fn,
         )
         logging.info(f"Created vector index '{index_name}' for label '{label}'")
+
+    def get_answer(
+        self,
+        question: str,
+        index_name: str,
+        top_k: int = 5,
+        temperature: float = 0,
+        embedding_model: str = "text-embedding-3-large",
+        chat_model: str = "gpt-4.1-mini",
+        include_context: bool = False,
+    ) -> Any:
+        """Get an answer to a question from the knowledge graph.
+
+        Args:
+            question: The question to answer
+            index_name: The name of the vector index to use
+            top_k: Number of top chunks to retrieve
+            temperature: LLM temperature for response generation
+            embedding_model: OpenAI embedding model to use
+            chat_model: OpenAI chat model to use
+            include_context: If True, returns tuple of (answer, context_documents)
+                           If False, returns just the answer string
+
+        Returns:
+            str: The answer as a string (if include_context=False)
+            tuple[str, list[str]]: Tuple of (answer, context_documents) (if include_context=True)
+        """
+        embedder = OpenAIEmbeddings(model=embedding_model)
+        retriever = VectorRetriever(self._driver, index_name, embedder)
+        llm = OpenAILLM(
+            model_name=chat_model, model_params={"temperature": temperature}
+        )
+
+        if include_context:
+            # Get the chunks using retriever directly
+            retrieval_result = retriever.search(query_text=question, top_k=top_k)
+
+            # Get the answer using GraphRAG
+            rag = GraphRAG(retriever=retriever, llm=llm)
+            response = rag.search(
+                query_text=question, retriever_config={"top_k": top_k}
+            )
+
+            # Extract context documents as strings (matching basic_rag format)
+            context_documents = []
+            for item in retrieval_result.items:
+                context_documents.append(item.content)
+
+            # Return tuple matching basic_rag schema: (answer, context_documents)
+            return response.answer, context_documents
+        else:
+            # Original behavior - just return the answer string
+            rag = GraphRAG(retriever=retriever, llm=llm)
+            response = rag.search(
+                query_text=question, retriever_config={"top_k": top_k}
+            )
+            return response.answer
 
     def __enter__(self) -> "Neo4jConnection":
         """Context manager entry."""

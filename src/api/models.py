@@ -53,7 +53,7 @@ class IngestPDFRequest(BaseIngestPDFRequest):
 class IngestPDFGraphRequest(IngestPDFRequest):
     """Model for PDF ingestion request for graph RAG."""
 
-    llm_model_name: str = Field("gpt-4o", description="LLM model for graph processing")
+    llm_model_name: str = Field("gpt-4.1-mini", description="LLM model for graph processing")
     run_entity_resolution: bool = Field(
         True, description="Whether to run entity resolution"
     )
@@ -77,7 +77,7 @@ class SchemaUpdateRequest(BaseModel):
 
     node_types: List[str] = Field(..., description="List of node types")
     relationship_types: List[str] = Field(..., description="List of relationship types")
-    patterns: List[str] = Field(..., description="List of patterns")
+    patterns: List[List[str]] = Field(..., description="List of patterns as [source_node, relationship, target_node] triplets")
 
     @field_validator("node_types")
     @classmethod
@@ -100,6 +100,20 @@ class SchemaUpdateRequest(BaseModel):
             if not isinstance(rel_type, str) or not rel_type.strip():
                 raise ValueError(f"relationship_types[{i}] must be a non-empty string")
         return [rel_type.strip() for rel_type in v]
+
+    @field_validator("patterns")
+    @classmethod
+    def validate_patterns(cls, v: List[List[str]]) -> List[List[str]]:
+        """Validate patterns field."""
+        if not v:
+            raise ValueError("patterns cannot be empty")
+        for i, pattern in enumerate(v):
+            if not isinstance(pattern, list) or len(pattern) != 3:
+                raise ValueError(f"patterns[{i}] must be a list with exactly 3 elements [source_node, relationship, target_node]")
+            for j, element in enumerate(pattern):
+                if not isinstance(element, str) or not element.strip():
+                    raise ValueError(f"patterns[{i}][{j}] must be a non-empty string")
+        return [[element.strip() for element in pattern] for pattern in v]
 
 
 class CreateIndexRequest(BaseModel):
@@ -163,7 +177,7 @@ class ChatRequest(BaseModel):
     max_tokens: int = Field(
         1000, description="Maximum tokens in response", gt=0, le=4000
     )
-    chat_model_name: str = Field("gpt-4o", description="OpenAI chat model name")
+    chat_model_name: str = Field("gpt-4.1-mini", description="OpenAI chat model name")
     embedding_model: str = Field(
         "text-embedding-3-large", description="OpenAI embedding model name"
     )
@@ -193,3 +207,34 @@ class ChatResponse(BaseModel):
         ..., description="Context documents used for generation"
     )
     metadata: dict = Field(..., description="Additional metadata about the response")
+
+
+class GraphResolutionRequest(BaseModel):
+    """Model for graph entity resolution request."""
+
+    resolve_properties: List[str] = Field(
+        ["name"], description="Properties to compare for similarity"
+    )
+    similarity_threshold: float = Field(
+        0.5, description="Threshold for entity matching", ge=0.0, le=1.0
+    )
+    
+    @field_validator("resolve_properties")
+    @classmethod
+    def validate_resolve_properties(cls, v: List[str]) -> List[str]:
+        """Validate resolve properties field."""
+        if not v:
+            raise ValueError("resolve_properties cannot be empty")
+        for i, prop in enumerate(v):
+            if not isinstance(prop, str) or not prop.strip():
+                raise ValueError(f"resolve_properties[{i}] must be a non-empty string")
+        return [prop.strip() for prop in v]
+
+
+class GraphResolutionResponse(BaseModel):
+    """Model for graph entity resolution response."""
+
+    message: str = Field(..., description="Response message")
+    status: str = Field(..., description="Operation status")
+    resolved_entities: int = Field(..., description="Number of entities resolved")
+    execution_time: float = Field(..., description="Execution time in seconds")

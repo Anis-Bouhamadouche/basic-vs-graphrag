@@ -28,7 +28,7 @@ class RAGConfig:
     top_k: int = 10
     temperature: float = 0.0
     max_tokens: Optional[int] = None
-    chat_model_name: str = "gpt-4o"
+    chat_model_name: str = "gpt-4.1-mini"
     system_message: str = (
         "You are a EU AI Act compliance assistant. The users will ask you questions about EU AI Act compliance. "
         "Strictly reply from the context provided. If the context is not sufficient to answer the question, "

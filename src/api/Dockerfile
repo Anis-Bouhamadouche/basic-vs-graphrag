@@ -13,9 +13,12 @@ COPY ../../pyproject.toml ./
 
 # Install dependencies directly with pip (simpler for containers)
 RUN pip install fastapi uvicorn[standard] python-dotenv \
-    neo4j-graphrag[openai] langchain-openai qdrant-client \
+    neo4j-graphrag[openai] neo4j-graphrag[nlp] spacy langchain-openai qdrant-client \
     tenacity langgraph langchain-community langchain pypdf \
     langchain-qdrant
+
+# Download SpaCy English language model
+RUN python -m spacy download en_core_web_sm
 
 # Copy the entire src directory to maintain import structure
 COPY ../../src/ ./
