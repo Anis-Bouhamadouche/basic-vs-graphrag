@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChatMessage, SourceDocument } from '../types';
 import { BotIcon, UserIcon, DocumentIcon } from './ui/icons';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface MessageProps {
   message: ChatMessage;
@@ -63,9 +64,16 @@ const Message: React.FC<MessageProps> = ({ message, onShowSources }) => {
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                {message.content}
-              </p>
+              {isUser ? (
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                  {message.content}
+                </p>
+              ) : (
+                <MarkdownRenderer 
+                  content={message.content} 
+                  className="text-sm leading-relaxed"
+                />
+              )}
               {message.sources && message.sources.length > 0 && (
                 <button
                   onClick={() => onShowSources(message.sources!)}

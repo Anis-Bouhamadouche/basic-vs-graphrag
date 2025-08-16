@@ -5,6 +5,7 @@
 
 export { default as ChatInput } from './ChatInput';
 export { default as LoadingMessage } from './LoadingMessage';
+export { default as MarkdownRenderer } from './MarkdownRenderer';
 export { default as Message } from './Message';
 export { default as SettingsSidebar } from './SettingsSidebar';
 
