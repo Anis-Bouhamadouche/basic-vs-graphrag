@@ -177,7 +177,7 @@ class ChatRequest(BaseModel):
     max_tokens: int = Field(
         1000, description="Maximum tokens in response", gt=0, le=4000
     )
-    chat_model_name: str = Field("gpt-4o-mini", description="OpenAI chat model name")
+    chat_model_name: str = Field("gpt-4.1-mini", description="OpenAI chat model name")
     embedding_model: str = Field(
         "text-embedding-3-large", description="OpenAI embedding model name"
     )
