@@ -14,7 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Python lib directories (but not frontend lib directories)
+/lib/
 lib64/
 parts/
 sdist/
@@ -214,3 +215,36 @@ qdrant_data
 *.ipynb
 *.json
 example.py
+
+# React / Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# React build outputs
+build/
+dist/
+*.tsbuildinfo
+
+# React development
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# React testing
+coverage/
+.nyc_output
+
+# React Storybook
+
+# React frontend lib directory should NOT be ignored
+!src/frontend/src/lib/
+storybook-static
