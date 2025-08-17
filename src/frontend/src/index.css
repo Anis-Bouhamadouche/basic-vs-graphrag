@@ -53,3 +53,45 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* Markdown and Code Highlighting Styles */
+.markdown-content > *:first-child {
+  margin-top: 0 !important;
+}
+
+.markdown-content > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Code highlighting styles */
+.hljs {
+  background: #1f2937 !important;
+  color: #f9fafb !important;
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.hljs-keyword {
+  color: #8b5cf6 !important;
+}
+
+.hljs-string {
+  color: #10b981 !important;
+}
+
+.hljs-number {
+  color: #f59e0b !important;
+}
+
+.hljs-comment {
+  color: #6b7280 !important;
+  font-style: italic;
+}
+
+.hljs-function {
+  color: #3b82f6 !important;
+}
+
+.hljs-variable {
+  color: #ef4444 !important;
+}

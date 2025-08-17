@@ -4,6 +4,7 @@ export interface ChatMessage {
   sender: 'user' | 'assistant';
   timestamp: Date;
   sources?: SourceDocument[];
+  ragType?: 'basic' | 'graph'; // Add RAG type
 }
 
 export interface SourceDocument {
@@ -30,4 +31,9 @@ export interface ChatResponse {
   answer: string;
   sources?: SourceDocument[];
   metadata?: any;
+}
+
+export interface DualRAGResponse {
+  basic: ChatResponse;
+  graph: ChatResponse;
 }

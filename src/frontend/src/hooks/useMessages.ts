@@ -1,10 +1,10 @@
 /**
  * Custom hook for managing chat messages and API communication
- * Provides message state management, API calls, and error handling
+ * Provides message state management, API calls, and error handling for dual RAG comparison
  */
 
 import { useState, useCallback } from 'react';
-import { ChatMessage, RAGConfig } from '../types';
+import { ChatMessage, RAGConfig, DualRAGResponse } from '../types';
 import { sendChatMessage } from '../lib/api';
 import { generateId } from '../lib/utils';
 
@@ -29,13 +29,15 @@ export const useMessages = (config: RAGConfig): UseMessagesReturn => {
   const createMessage = useCallback((
     content: string, 
     sender: 'user' | 'assistant',
-    sources?: ChatMessage['sources']
+    sources?: ChatMessage['sources'],
+    ragType?: 'basic' | 'graph'
   ): ChatMessage => ({
     id: generateId(),
     content,
     sender,
     timestamp: new Date(),
     sources,
+    ragType,
   }), []);
 
   const handleSendMessage = useCallback(async (inputMessage: string): Promise<boolean> => {
@@ -49,9 +51,26 @@ export const useMessages = (config: RAGConfig): UseMessagesReturn => {
     setIsLoading(true);
 
     try {
-      const response = await sendChatMessage(inputMessage, config);
-      const assistantMessage = createMessage(response.answer, 'assistant', response.sources);
-      addMessage(assistantMessage);
+      const response: DualRAGResponse = await sendChatMessage(inputMessage, config);
+      
+      // Add basic RAG response
+      const basicMessage = createMessage(
+        response.basic.answer, 
+        'assistant', 
+        response.basic.sources,
+        'basic'
+      );
+      addMessage(basicMessage);
+      
+      // Add graph RAG response
+      const graphMessage = createMessage(
+        response.graph.answer, 
+        'assistant', 
+        response.graph.sources,
+        'graph'
+      );
+      addMessage(graphMessage);
+      
       return true;
     } catch (error) {
       console.error('Error sending message:', error);
