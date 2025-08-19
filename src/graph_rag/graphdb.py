@@ -379,6 +379,107 @@ class Neo4jConnection:
         )
         logging.info(f"Created vector index '{index_name}' for label '{label}'")
 
+    def _format_graph_context(self, content: Any) -> str:
+        """Format Neo4j Record content into a readable context format.
+        
+        Args:
+            content: The raw Neo4j Record content
+            
+        Returns:
+            Formatted string with main text content and related entities
+        """
+        try:
+            import ast
+            import re
+            
+            # Convert the content to string and parse if it looks like a Record
+            content_str = str(content)
+            
+            # Check if this is a Record object string
+            if content_str.startswith("<Record "):
+                # Extract the content within the Record
+                match = re.search(r"<Record (.+)>", content_str, re.DOTALL)
+                if match:
+                    record_content = match.group(1)
+                    
+                    # Parse the chunk data
+                    try:
+                        # Try to extract the chunk dict and neighbors
+                        chunk_match = re.search(r"chunk=({.+?}) score=([0-9.]+) neighbors=(\[.+\])", record_content, re.DOTALL)
+                        if chunk_match:
+                            chunk_str = chunk_match.group(1)
+                            score = float(chunk_match.group(2))
+                            neighbors_str = chunk_match.group(3)
+                            
+                            # Parse chunk data
+                            chunk_data = ast.literal_eval(chunk_str)
+                            neighbors_data = ast.literal_eval(neighbors_str)
+                            
+                            # Format the main content
+                            main_text = chunk_data.get('text', '')
+                            chunk_id = chunk_data.get('id', '')
+                            
+                            # Build formatted context
+                            formatted_parts = []
+                            
+                            # Add main content section
+                            if main_text:
+                                formatted_parts.append("📄 **Document Content:**")
+                                # Clean up the text (remove extra whitespace)
+                                clean_text = re.sub(r'\s+', ' ', main_text.strip())
+                                formatted_parts.append(clean_text)
+                                formatted_parts.append("")  # Empty line
+                            
+                            # Add score
+                            formatted_parts.append(f"📊 **Relevance Score:** {score:.3f}")
+                            formatted_parts.append("")
+                            
+                            # Add related entities from neighbors
+                            if neighbors_data:
+                                formatted_parts.append("🔗 **Related Knowledge Graph Entities:**")
+                                
+                                for neighbor in neighbors_data:
+                                    # Filter out technical labels
+                                    labels = [label for label in neighbor.get('labels', [])
+                                              if label not in ['__KGBuilder__', '__Entity__']]
+                                    
+                                    if labels:
+                                        entity_type = labels[0]  # Primary entity type
+                                        props = neighbor.get('props', {})
+                                        preview = neighbor.get('preview', '')
+                                        
+                                        # Get name or description
+                                        name = props.get('name', preview)
+                                        description = props.get('description', '')
+                                        
+                                        entity_line = f"  • **{entity_type}**: {name}"
+                                        if description and description != name:
+                                            entity_line += f" - {description}"
+                                        
+                                        formatted_parts.append(entity_line)
+                                
+                                formatted_parts.append("")
+                            
+                            # Add document ID at the end
+                            if chunk_id:
+                                formatted_parts.append(f"🆔 **Source ID:** {chunk_id}")
+                            
+                            return "\n".join(formatted_parts)
+                            
+                    except (ValueError, SyntaxError) as e:
+                        logging.warning(f"Failed to parse Record content, using fallback: {e}")
+            
+            # Fallback: just clean up the raw content
+            content_str = str(content)
+            # Remove embedding arrays to keep content clean
+            content_str = re.sub(r"'embedding':\s*\[[^\]]*\]", "'embedding': [...]", content_str)
+            content_str = re.sub(r'"embedding":\s*\[[^\]]*\]', '"embedding": [...]', content_str)
+            return content_str
+            
+        except Exception as e:
+            logging.error(f"Error formatting graph context: {e}")
+            return str(content)
+
     def get_answer(
         self,
         question: str,
@@ -502,29 +603,13 @@ class Neo4jConnection:
                 try:
                     if hasattr(item, "content") and item.content:
                         content = item.content
-
-                        # Convert content to string and use as-is, just remove embeddings
-                        content_str = str(content)
-
-                        # Remove embedding arrays to keep content clean
-                        import re
-
-                        # Remove embedding arrays (large float arrays)
-                        content_str = re.sub(
-                            r"'embedding':\s*\[[^\]]*\]",
-                            "'embedding': [...]",
-                            content_str,
-                        )
-                        content_str = re.sub(
-                            r'"embedding":\s*\[[^\]]*\]',
-                            '"embedding": [...]',
-                            content_str,
-                        )
-
-                        # Add the full content as-is
-                        context_documents.append(content_str)
+                        
+                        # Parse the Neo4j Record to extract structured information
+                        formatted_context = self._format_graph_context(content)
+                        context_documents.append(formatted_context)
+                        
                         logging.info(
-                            f"Item {i}: Added full content ({len(content_str)} chars)"
+                            f"Item {i}: Added formatted context ({len(formatted_context)} chars)"
                         )
 
                 except Exception as e:

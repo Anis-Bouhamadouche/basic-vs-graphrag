@@ -6,6 +6,7 @@ import Message from './components/Message';
 import LoadingMessage from './components/LoadingMessage';
 import ChatInput from './components/ChatInput';
 import { SettingsIcon, BotIcon, CloseIcon } from './components/ui/icons';
+import MarkdownRenderer from './components/MarkdownRenderer';
 
 // Constants
 const DEFAULT_CONFIG: RAGConfig = {
@@ -136,7 +137,12 @@ const App: React.FC = () => {
                   </span>
                 )}
               </div>
-              <p className="text-text-secondary text-sm leading-relaxed">{source.content}</p>
+              <div className="text-text-secondary text-sm leading-relaxed">
+                <MarkdownRenderer 
+                  content={source.content} 
+                  className="text-sm leading-relaxed"
+                />
+              </div>
             </div>
           ))}
         </div>
