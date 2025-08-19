@@ -10,7 +10,7 @@ from neo4j_graphrag.experimental.pipeline.kg_builder import SimpleKGPipeline
 from neo4j_graphrag.generation import GraphRAG
 from neo4j_graphrag.indexes import create_vector_index
 from neo4j_graphrag.llm import OpenAILLM
-from neo4j_graphrag.retrievers import VectorCypherRetriever, VectorRetriever
+from neo4j_graphrag.retrievers import VectorCypherRetriever
 
 
 class Neo4jConnection:
@@ -333,7 +333,9 @@ class Neo4jConnection:
         """
         )
         stats["nodes_by_label"] = {
-            record["label"]: record["count"] for record in result if record["label"] is not None
+            record["label"]: record["count"]
+            for record in result
+            if record["label"] is not None
         }
 
         # Get relationship counts by type
@@ -386,6 +388,8 @@ class Neo4jConnection:
         embedding_model: str = "text-embedding-3-large",
         chat_model: str = "gpt-4.1-mini",
         include_context: bool = False,
+        allowed_labels: Optional[List[str]] = None,
+        allowed_relationships: Optional[List[str]] = None,
     ) -> Any:
         """Get an answer to a question from the knowledge graph.
 
@@ -398,41 +402,165 @@ class Neo4jConnection:
             chat_model: OpenAI chat model to use
             include_context: If True, returns tuple of (answer, context_documents)
                            If False, returns just the answer string
+            allowed_labels: List of allowed node labels from schema (optional)
+            allowed_relationships: List of allowed relationship types from schema (optional)
 
         Returns:
             str: The answer as a string (if include_context=False)
             tuple[str, list[str]]: Tuple of (answer, context_documents) (if include_context=True)
         """
         embedder = OpenAIEmbeddings(model=embedding_model)
-        retriever = VectorRetriever(self._driver, index_name, embedder)
+
+        # Use provided labels and relationships, or fall back to defaults
+        default_labels = [
+            "Article",
+            "Role",
+            "RiskLevel",
+            "Term",
+            "Provision",
+            "Definition",
+            "HighRiskCategory",
+            "ProhibitedPractice",
+            "Annex",
+        ]
+        default_relationships = [
+            "GROUNDED_IN",
+            "REFERS_TO",
+            "MENTIONS",
+            "APPLIES_TO",
+            "CLASSIFIES_AS",
+            "CITES",
+        ]
+
+        labels_to_use = allowed_labels if allowed_labels else default_labels
+        relationships_to_use = (
+            allowed_relationships if allowed_relationships else default_relationships
+        )
+
+        # Define the retrieval Cypher query that runs after vector kNN
+        retrieval_query = """
+        // Seed `node` and `score` come from the vector kNN step
+        
+        // Simple neighbor collection
+        OPTIONAL MATCH (node)-[r]-(neighbor)
+        WHERE neighbor IS NOT NULL AND neighbor <> node
+        
+        // Collect neighbors with simple limit
+        WITH node, score, collect(DISTINCT neighbor)[..8] AS neighbors_list
+        
+        // Return clean data structure
+        RETURN
+        node {
+            id: coalesce(node.id, elementId(node)),
+            text: coalesce(node.text, node.name, node.description, '')
+        } AS chunk,
+        score,
+        [n IN neighbors_list | {
+            id: coalesce(n.id, elementId(n)),
+            labels: labels(n),
+            props: n { .* },
+            preview: coalesce(n.text, n.name, n.description, '')
+        }] AS neighbors
+        """
+
+        # Create VectorCypherRetriever instead of VectorRetriever
+        retriever = VectorCypherRetriever(
+            driver=self._driver,
+            index_name=index_name,
+            retrieval_query=retrieval_query,
+            embedder=embedder,
+        )
+
         llm = OpenAILLM(
             model_name=chat_model, model_params={"temperature": temperature}
         )
 
+        # Define query parameters once to avoid duplication
+        query_params = {
+            "maxHops": 2,
+            "allowRels": relationships_to_use,
+            "allowLabels": labels_to_use,
+            "maxNeighborsPerSeed": 40,
+        }
+
+        # Create GraphRAG once
+        rag = GraphRAG(retriever=retriever, llm=llm)
+
         if include_context:
-            # Get the chunks using retriever directly
-            retrieval_result = retriever.search(query_text=question, top_k=top_k)
+            # Get retrieval result first for context documents - this gives us the raw Neo4j records
+            retrieval_result = retriever.search(
+                query_text=question, top_k=top_k, query_params=query_params
+            )
+
+            # Extract context documents from the retrieval result
+            context_documents = []
+            logging.info(
+                f"Retrieved {len(retrieval_result.items)} items from vector search"
+            )
+
+            for i, item in enumerate(retrieval_result.items):
+                try:
+                    if hasattr(item, "content") and item.content:
+                        content = item.content
+
+                        # Convert content to string and use as-is, just remove embeddings
+                        content_str = str(content)
+
+                        # Remove embedding arrays to keep content clean
+                        import re
+
+                        # Remove embedding arrays (large float arrays)
+                        content_str = re.sub(
+                            r"'embedding':\s*\[[^\]]*\]",
+                            "'embedding': [...]",
+                            content_str,
+                        )
+                        content_str = re.sub(
+                            r'"embedding":\s*\[[^\]]*\]',
+                            '"embedding": [...]',
+                            content_str,
+                        )
+
+                        # Add the full content as-is
+                        context_documents.append(content_str)
+                        logging.info(
+                            f"Item {i}: Added full content ({len(content_str)} chars)"
+                        )
+
+                except Exception as e:
+                    logging.error(f"Error processing item {i}: {e}")
+                    continue
+
+            logging.info(
+                f"Successfully extracted {len(context_documents)} context documents with graph metadata"
+            )
 
             # Get the answer using GraphRAG
-            rag = GraphRAG(retriever=retriever, llm=llm)
             response = rag.search(
-                query_text=question, retriever_config={"top_k": top_k}
+                query_text=question,
+                retriever_config={"top_k": top_k, "query_params": query_params},
             )
-
-            # Extract context documents as strings (matching basic_rag format)
-            context_documents = []
-            for item in retrieval_result.items:
-                context_documents.append(item.content)
 
             # Return tuple matching basic_rag schema: (answer, context_documents)
-            return response.answer, context_documents
+            answer = (
+                response.answer
+                if response.answer is not None
+                else "No answer available"
+            )
+            # return answer, truncated_context
+            return answer, context_documents
         else:
             # Original behavior - just return the answer string
-            rag = GraphRAG(retriever=retriever, llm=llm)
             response = rag.search(
-                query_text=question, retriever_config={"top_k": top_k}
+                query_text=question,
+                retriever_config={"top_k": top_k, "query_params": query_params},
             )
-            return response.answer
+            answer = (
+                response.answer
+                if response.answer is not None
+                else "No answer available"
+            )
+            return answer
 
     def __enter__(self) -> "Neo4jConnection":
         """Context manager entry."""

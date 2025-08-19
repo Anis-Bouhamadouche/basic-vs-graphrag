@@ -48,7 +48,199 @@ OPENAI_DEPLOYMENT_EMBEDDING = os.getenv("OPENAI_DEPLOYMENT_EMBEDDING")
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
-SCHEMA: Optional[Dict[str, Any]] = None
+SCHEMA: Optional[Dict[str, Any]] = {
+    "node_types": [
+        "Act",
+        "Chapter",
+        "Section",
+        "Article",
+        "Annex",
+        "Recital",
+        "Term",
+        "Definition",
+        "RiskLevel",
+        "ProhibitedPractice",
+        "HighRiskCategory",
+        "LimitedRiskMeasure",
+        "MinimalRisk",
+        "GPAI",
+        "GeneralPurposeModel",
+        "Role",
+        "Actor",
+        "Provider",
+        "Deployer",
+        "Importer",
+        "Distributor",
+        "AuthorizedRepresentative",
+        "NotifiedBody",
+        "MarketSurveillanceAuthority",
+        "Standard",
+        "TechnicalSpecification",
+        "Obligation",
+        "Requirement",
+        "Provision",
+        "Procedure",
+        "ConformityAssessment",
+        "PostMarketMonitoring",
+        "RiskManagementSystem",
+        "DataGovernance",
+        "TransparencyMeasure",
+        "HumanOversight",
+        "AccuracyRobustnessCybersecurity",
+        "Documentation",
+        "Registration",
+        "IncidentReporting",
+        "Enforcement",
+        "Sanction",
+        "Fine",
+        "Exemption",
+        "Derogation",
+        "UseCase",
+        "System",
+        "Modality",
+        "Sector",
+        "Purpose",
+        "Capability",
+        "Harm",
+        "Caveat",
+        "Citation",
+    ],
+    "relationship_types": [
+        "has_chapter",
+        "has_section",
+        "has_article",
+        "has_annex",
+        "has_recital",
+        "defines_term",
+        "has_definition",
+        "defined_in_article",
+        "defined_in_annex",
+        "mentions_term",
+        "scoped_by_article",
+        "grounded_in_article",
+        "grounded_in_section",
+        "grounded_in_annex",
+        "cross_references_article",
+        "has_risk_level",
+        "classifies_as_high_risk",
+        "classifies_as_prohibited",
+        "classifies_as_limited_risk",
+        "classifies_as_minimal_risk",
+        "details_provision_for",
+        "requires",
+        "entails",
+        "prohibits",
+        "allows_with_measures",
+        "exempts",
+        "derogates",
+        "applicable_to_role",
+        "obligation_for_role",
+        "obligation_at_risk_level",
+        "provision_at_risk_level",
+        "uses_standard",
+        "conforms_to_technical_spec",
+        "requires_conformity_assessment",
+        "performed_by_notified_body",
+        "monitored_by_authority",
+        "requires_registration",
+        "requires_documentation",
+        "requires_data_governance",
+        "requires_human_oversight",
+        "requires_transparency",
+        "requires_accuracy_robustness_cybersecurity",
+        "requires_post_market_monitoring",
+        "requires_incident_reporting",
+        "subject_to_enforcement",
+        "subject_to_sanction",
+        "penalized_by_fine",
+        "has_exception_caveat",
+        "belongs_to_sector",
+        "has_purpose",
+        "has_capability",
+        "poses_harm",
+        "is_gpai",
+        "is_general_purpose_model",
+        "has_citation",
+        "is_a",
+        "maps_to",
+    ],
+    "patterns": [
+        ["Act", "has_article", "Article"],
+        ["Act", "has_annex", "Annex"],
+        ["Act", "has_chapter", "Chapter"],
+        ["Chapter", "has_section", "Section"],
+        ["Section", "has_article", "Article"],
+        ["Article", "has_definition", "Definition"],
+        ["Definition", "defines_term", "Term"],
+        ["Definition", "grounded_in_article", "Article"],
+        ["Term", "defined_in_article", "Article"],
+        ["Annex", "has_definition", "Definition"],
+        ["Article", "cross_references_article", "Article"],
+        ["Article", "details_provision_for", "Provision"],
+        ["Provision", "grounded_in_article", "Article"],
+        ["Term", "mentions_term", "RiskLevel"],
+        ["RiskLevel", "provision_at_risk_level", "Provision"],
+        ["RiskLevel", "obligation_at_risk_level", "Obligation"],
+        ["RiskLevel", "grounded_in_article", "Article"],
+        ["GPAI", "is_general_purpose_model", "GeneralPurposeModel"],
+        ["GPAI", "obligation_at_risk_level", "Obligation"],
+        ["GPAI", "grounded_in_article", "Article"],
+        ["Role", "obligation_for_role", "Obligation"],
+        ["Obligation", "grounded_in_article", "Article"],
+        ["Obligation", "requires", "Requirement"],
+        ["Requirement", "grounded_in_article", "Article"],
+        ["HighRiskCategory", "grounded_in_annex", "Annex"],
+        ["HighRiskCategory", "provision_at_risk_level", "Provision"],
+        ["HighRiskCategory", "requires_conformity_assessment", "ConformityAssessment"],
+        ["ConformityAssessment", "performed_by_notified_body", "NotifiedBody"],
+        ["ConformityAssessment", "grounded_in_article", "Article"],
+        ["ProhibitedPractice", "prohibits", "System"],
+        ["ProhibitedPractice", "grounded_in_article", "Article"],
+        ["LimitedRiskMeasure", "requires_transparency", "TransparencyMeasure"],
+        ["LimitedRiskMeasure", "grounded_in_article", "Article"],
+        ["MinimalRisk", "allows_with_measures", "Provision"],
+        ["MinimalRisk", "grounded_in_article", "Article"],
+        ["Requirement", "uses_standard", "Standard"],
+        ["Requirement", "conforms_to_technical_spec", "TechnicalSpecification"],
+        ["Standard", "grounded_in_article", "Article"],
+        ["TechnicalSpecification", "grounded_in_article", "Article"],
+        ["UseCase", "has_purpose", "Purpose"],
+        ["UseCase", "belongs_to_sector", "Sector"],
+        ["UseCase", "has_capability", "Capability"],
+        ["UseCase", "poses_harm", "Harm"],
+        ["UseCase", "maps_to", "System"],
+        ["System", "has_risk_level", "RiskLevel"],
+        ["System", "classifies_as_high_risk", "HighRiskCategory"],
+        ["System", "classifies_as_prohibited", "ProhibitedPractice"],
+        ["System", "classifies_as_limited_risk", "LimitedRiskMeasure"],
+        ["System", "classifies_as_minimal_risk", "MinimalRisk"],
+        ["System", "is_gpai", "GPAI"],
+        ["System", "grounded_in_article", "Article"],
+        ["Actor", "is_a", "Role"],
+        ["Actor", "applicable_to_role", "Role"],
+        ["Actor", "has_risk_level", "RiskLevel"],
+        ["Role", "requires_registration", "Registration"],
+        ["Role", "requires_documentation", "Documentation"],
+        ["Role", "requires_data_governance", "DataGovernance"],
+        ["Role", "requires_human_oversight", "HumanOversight"],
+        [
+            "Role",
+            "requires_accuracy_robustness_cybersecurity",
+            "AccuracyRobustnessCybersecurity",
+        ],
+        ["Role", "requires_post_market_monitoring", "PostMarketMonitoring"],
+        ["Role", "requires_incident_reporting", "IncidentReporting"],
+        ["Enforcement", "subject_to_sanction", "Sanction"],
+        ["Sanction", "penalized_by_fine", "Fine"],
+        ["Sanction", "grounded_in_article", "Article"],
+        ["Provision", "has_exception_caveat", "Caveat"],
+        ["Caveat", "grounded_in_article", "Article"],
+        ["Term", "has_citation", "Citation"],
+        ["Provision", "has_citation", "Citation"],
+        ["Obligation", "has_citation", "Citation"],
+    ],
+}
+
 
 # Global Neo4j connection
 neo4j_conn = None
@@ -351,14 +543,16 @@ async def get_kg_stats() -> dict[str, Any]:
 
 
 @app.post("/graph-rag/resolve-entities", response_model=GraphResolutionResponse)
-async def resolve_graph_entities(request: GraphResolutionRequest) -> GraphResolutionResponse:
+async def resolve_graph_entities(
+    request: GraphResolutionRequest,
+) -> GraphResolutionResponse:
     """Resolve entities in the knowledge graph using SpaCy semantic matching.
-    
-    This endpoint runs entity resolution to merge similar entities based on 
+
+    This endpoint runs entity resolution to merge similar entities based on
     semantic similarity of their properties.
     """
     import time
-    
+
     try:
         if not neo4j_conn:
             raise HTTPException(
@@ -367,38 +561,40 @@ async def resolve_graph_entities(request: GraphResolutionRequest) -> GraphResolu
 
         logger.info("Starting entity resolution process...")
         start_time = time.time()
-        
+
         # Get initial entity count for comparison
         initial_stats = neo4j_conn.get_kg_stats()
         initial_entities = initial_stats.get("total_nodes", 0)
-        
+
         # Create entity resolver with provided configuration
         resolver = neo4j_conn.create_entity_resolver(
             resolve_properties=request.resolve_properties,
-            similarity_threshold=request.similarity_threshold
+            similarity_threshold=request.similarity_threshold,
         )
-        
+
         # Run entity resolution
         await resolver.run()
-        
+
         # Get final entity count
         final_stats = neo4j_conn.get_kg_stats()
         final_entities = final_stats.get("total_nodes", 0)
-        
+
         # Calculate resolved entities (entities that were merged/removed)
         resolved_entities = max(0, initial_entities - final_entities)
-        
+
         execution_time = time.time() - start_time
-        
-        logger.info(f"Entity resolution completed. Resolved {resolved_entities} entities in {execution_time:.2f}s")
-        
+
+        logger.info(
+            f"Entity resolution completed. Resolved {resolved_entities} entities in {execution_time:.2f}s"
+        )
+
         return GraphResolutionResponse(
             message=f"Entity resolution completed successfully. Resolved {resolved_entities} duplicate entities.",
             status="success",
             resolved_entities=resolved_entities,
-            execution_time=execution_time
+            execution_time=execution_time,
         )
-        
+
     except HTTPException:
         raise
     except ConnectionError as e:
@@ -407,14 +603,13 @@ async def resolve_graph_entities(request: GraphResolutionRequest) -> GraphResolu
     except ImportError as e:
         logger.error(f"SpaCy dependency error: {e}")
         raise HTTPException(
-            status_code=500, 
-            detail="SpaCy language model not available. Please ensure 'en_core_web_sm' model is installed in the container."
+            status_code=500,
+            detail="SpaCy language model not available. Please ensure 'en_core_web_sm' model is installed in the container.",
         )
     except Exception as e:
         logger.error(f"Error during entity resolution: {e}")
         raise HTTPException(
-            status_code=500,
-            detail="Internal server error during entity resolution"
+            status_code=500, detail="Internal server error during entity resolution"
         )
 
 
@@ -742,6 +937,21 @@ async def chat_with_graph_rag(request: ChatRequest) -> ChatResponse:
                 status_code=500, detail="Database connection not available"
             )
 
+        # Extract allowed labels and relationships from schema if available
+        allowed_labels = None
+        allowed_relationships = None
+
+        if SCHEMA is not None:
+            allowed_labels = SCHEMA.get("node_types")
+            allowed_relationships = SCHEMA.get("relationship_types")
+            logger.info(
+                f"Using schema with {len(allowed_labels) if allowed_labels else 0} node types and {len(allowed_relationships) if allowed_relationships else 0} relationship types"
+            )
+        else:
+            logger.warning(
+                "No schema available, using default labels and relationships"
+            )
+
         # Get the answer from the GraphRAG system
         # Use collection_name as the index_name for GraphRAG
         try:
@@ -753,6 +963,8 @@ async def chat_with_graph_rag(request: ChatRequest) -> ChatResponse:
                 embedding_model=request.embedding_model,
                 chat_model=request.chat_model_name,  # Map chat_model_name to chat_model
                 include_context=True,
+                allowed_labels=allowed_labels,
+                allowed_relationships=allowed_relationships,
             )
             answer, context_documents = result
         except ValueError as e:
@@ -766,7 +978,8 @@ async def chat_with_graph_rag(request: ChatRequest) -> ChatResponse:
         except Exception as e:
             logger.error(f"Unexpected error during GraphRAG processing: {e}")
             raise HTTPException(
-                status_code=500, detail="Internal server error during GraphRAG processing"
+                status_code=500,
+                detail="Internal server error during GraphRAG processing",
             )
 
         # Prepare metadata
@@ -778,6 +991,11 @@ async def chat_with_graph_rag(request: ChatRequest) -> ChatResponse:
             "temperature": request.temperature,
             "max_tokens": request.max_tokens,
             "rag_type": "graph",
+            "schema_used": SCHEMA is not None,
+            "allowed_labels_count": len(allowed_labels) if allowed_labels else 0,
+            "allowed_relationships_count": (
+                len(allowed_relationships) if allowed_relationships else 0
+            ),
         }
 
         logger.info("Graph RAG chat request completed successfully")

@@ -53,7 +53,9 @@ class IngestPDFRequest(BaseIngestPDFRequest):
 class IngestPDFGraphRequest(IngestPDFRequest):
     """Model for PDF ingestion request for graph RAG."""
 
-    llm_model_name: str = Field("gpt-4.1-mini", description="LLM model for graph processing")
+    llm_model_name: str = Field(
+        "gpt-4.1-mini", description="LLM model for graph processing"
+    )
     run_entity_resolution: bool = Field(
         True, description="Whether to run entity resolution"
     )
@@ -77,7 +79,10 @@ class SchemaUpdateRequest(BaseModel):
 
     node_types: List[str] = Field(..., description="List of node types")
     relationship_types: List[str] = Field(..., description="List of relationship types")
-    patterns: List[List[str]] = Field(..., description="List of patterns as [source_node, relationship, target_node] triplets")
+    patterns: List[List[str]] = Field(
+        ...,
+        description="List of patterns as [source_node, relationship, target_node] triplets",
+    )
 
     @field_validator("node_types")
     @classmethod
@@ -109,7 +114,9 @@ class SchemaUpdateRequest(BaseModel):
             raise ValueError("patterns cannot be empty")
         for i, pattern in enumerate(v):
             if not isinstance(pattern, list) or len(pattern) != 3:
-                raise ValueError(f"patterns[{i}] must be a list with exactly 3 elements [source_node, relationship, target_node]")
+                raise ValueError(
+                    f"patterns[{i}] must be a list with exactly 3 elements [source_node, relationship, target_node]"
+                )
             for j, element in enumerate(pattern):
                 if not isinstance(element, str) or not element.strip():
                     raise ValueError(f"patterns[{i}][{j}] must be a non-empty string")
@@ -120,7 +127,7 @@ class CreateIndexRequest(BaseModel):
     """Model for vector index creation requests."""
 
     index_name: str = Field(..., description="Name of the vector index", min_length=1)
-    label: str = Field(..., description="Neo4j node label", min_length=1)
+    label: str = Field("Chunk", description="Neo4j node label", min_length=1)
     embedding_property: str = Field(
         "embedding", description="Property name for embeddings", min_length=1
     )
@@ -218,7 +225,7 @@ class GraphResolutionRequest(BaseModel):
     similarity_threshold: float = Field(
         0.5, description="Threshold for entity matching", ge=0.0, le=1.0
     )
-    
+
     @field_validator("resolve_properties")
     @classmethod
     def validate_resolve_properties(cls, v: List[str]) -> List[str]:
